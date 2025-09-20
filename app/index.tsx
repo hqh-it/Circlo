@@ -2,6 +2,7 @@ import { Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Appfooter from "./components/Appfooter";
 import Appheader from "./components/Appheader";
+
 export default function Homepage() {
   return (
     <SafeAreaView style={{
@@ -16,4 +17,3 @@ export default function Homepage() {
     </SafeAreaView>
   );
 }
-
