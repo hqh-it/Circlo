@@ -1,15 +1,19 @@
-import { Text, View } from "react-native";
-
-export default function Index() {
+import { Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Appfooter from "./components/Appfooter";
+import Appheader from "./components/Appheader";
+export default function Homepage() {
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Text>Edit app/index.tsx to edit this app.</Text>
-    </View>
+    <SafeAreaView style={{
+          flex: 1,
+          flexDirection:"column",
+          alignItems:"center",
+          backgroundColor:"#ffffffff"
+        }}>   
+        <Appheader/>
+        <Text>Chưa có sản phẩm nào cả !</Text>
+        <Appfooter/>
+    </SafeAreaView>
   );
 }
+
