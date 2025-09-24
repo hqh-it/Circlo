@@ -1,9 +1,7 @@
-import { Text } from "react-native";
+import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Appfooter from "./components/Appfooter";
-import Appheader from "./components/Appheader";
-
-export default function Homepage() {
+import Homepage from "./screens/Home/homepage";
+export default function Index() {
   return (
     <SafeAreaView style={{
           flex: 1,
@@ -11,9 +9,7 @@ export default function Homepage() {
           alignItems:"center",
           backgroundColor:"#ffffffff"
         }}>   
-        <Appheader/>
-        <Text>Chưa có sản phẩm nào cả !</Text>
-        <Appfooter/>
+        <Homepage/>
     </SafeAreaView>
   );
 }

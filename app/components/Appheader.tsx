@@ -1,19 +1,23 @@
+import { useRouter } from "expo-router";
 import React from "react";
 import { Dimensions, Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 const {height, width}= Dimensions.get("window");
 
 export default function Appheader(){
+    const router = useRouter();
     return (
         <View style={styles.container}>
             
 
-            <TouchableOpacity>
+            <TouchableOpacity >
                 <Image style={styles.icon} source={require('../assets/icons/menu.png')}></Image>
             </TouchableOpacity>
             
             <Image style={styles.logo} source={require('../assets/images/logo.png')}></Image>
-            <Image style={styles.icon} source={require('../assets/images/avatar.png')}></Image>
+            <TouchableOpacity onPress={()=>router.push("/screens/Profile/profile")}>
+              <Image style={styles.icon} source={require('../assets/images/avatar.png')}></Image>
+            </TouchableOpacity>
         </View>
     );
 }
