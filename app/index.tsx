@@ -1,6 +1,6 @@
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Homepage from "./screens/Home/homepage";
+import EditProfile from "./components/EditProfile";
 export default function Index() {
   return (
     <SafeAreaView style={{
@@ -9,7 +9,7 @@ export default function Index() {
           alignItems:"center",
           backgroundColor:"#ffffffff"
         }}>   
-        <Homepage/>
+        <EditProfile/>
     </SafeAreaView>
   );
 }

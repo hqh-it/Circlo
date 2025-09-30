@@ -32,9 +32,11 @@ export default function Appfooter() {
           <Image style={styles.icon} source={require("../assets/icons/chat.png")} />
         </TouchableOpacity>
       </LinearGradient>
-      <TouchableOpacity style={styles.main_button}>
-        <Image style={styles.icon} source={require("../assets/icons/flus.png")} />
-      </TouchableOpacity>
+      <View style={styles.under_main_button}>
+        <TouchableOpacity style={styles.main_button}>
+            <Image style={styles.icon} source={require("../assets/icons/flus.png")} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -65,9 +67,15 @@ const styles = StyleSheet.create({
     height:height*0.1,
     width:height*0.1, 
     backgroundColor: "#D4A017",
-    borderRadius:height * 0.055,
-    borderWidth:height * 0.01,
-    borderColor:"#ffffffff",
+    borderRadius:100,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  under_main_button: {
+    height:height*0.12,
+    width:height*0.12, 
+    backgroundColor: "#ffffffff",
+    borderRadius:100,
     justifyContent: "center",
     alignItems: "center",
     position: "absolute",
