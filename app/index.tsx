@@ -1,6 +1,6 @@
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import EditProfile from "./components/EditProfile";
+import Login from "./screens/Auth/login";
 export default function Index() {
   return (
     <SafeAreaView style={{
@@ -9,7 +9,7 @@ export default function Index() {
           alignItems:"center",
           backgroundColor:"#ffffffff"
         }}>   
-        <EditProfile/>
+        <Login/>
     </SafeAreaView>
   );
 }
