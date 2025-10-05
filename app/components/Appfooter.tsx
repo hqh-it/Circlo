@@ -1,10 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React from "react";
 import { Dimensions, Image, StyleSheet, TouchableOpacity, View } from "react-native";
-
 const { height, width } = Dimensions.get("window");
 
 export default function Appfooter() {
+  const router = useRouter();
   return (
     <View style={styles.container}>
 
@@ -33,7 +34,7 @@ export default function Appfooter() {
         </TouchableOpacity>
       </LinearGradient>
       <View style={styles.under_main_button}>
-        <TouchableOpacity style={styles.main_button}>
+        <TouchableOpacity style={styles.main_button} onPress={()=> router.push('/screens/Products/add_product')}>
             <Image style={styles.icon} source={require("../assets/icons/flus.png")} />
         </TouchableOpacity>
       </View>

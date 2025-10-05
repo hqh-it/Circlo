@@ -13,12 +13,12 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useAuth } from "../../services/Auth/AuthContext";
-import { uploadAvatar } from '../../services/cloudinaryService';
-import { fetchDistricts, fetchProvinces, fetchWards, getFullAddress, loadAddressHierarchy } from "../../services/User/address";
-import { loadUserData, saveUserProfile } from "../../services/User/userService"; // NEW IMPORT
-import AddressPicker from "../components/AddressPicker";
-import Header from "../components/header_for_detail";
+import { useAuth } from "../../../services/Auth/AuthContext";
+import { uploadAvatar } from '../../../services/cloudinaryService';
+import { fetchDistricts, fetchProvinces, fetchWards, getFullAddress, loadAddressHierarchy } from "../../../services/User/address";
+import { loadUserData, saveUserProfile } from "../../../services/User/userService";
+import AddressPicker from "../../components/AddressPicker";
+import Header from "../../components/header_for_detail";
 
 const { width } = Dimensions.get("window");
 
@@ -248,7 +248,7 @@ export default function EditProfile() {
 
       {/* Avatar section */}
       <ImageBackground
-        source={require('../assets/images/background_profile.jpg')}
+        source={require('../../assets/images/background_profile.jpg')}
         style={styles.headerBackground}
         imageStyle={{ borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}
       >
@@ -259,13 +259,13 @@ export default function EditProfile() {
                 ? { uri: newAvatar } // Hiển thị avatar mới nếu có
                 : avatar 
                   ? { uri: avatar } // Hiển thị avatar cũ
-                  : require("../assets/icons/profile-picture.png")
+                  : require("../../assets/icons/profile-picture.png")
             }
             style={styles.avatar}/>
           {/* Change avatar button */}
           <TouchableOpacity style={styles.changeAvatarBtn} onPress={pickImage}>
             <Image
-              source={require('../assets/icons/avatar.png')}
+              source={require('../../assets/icons/avatar.png')}
               style={styles.changeAvatarIcon}
             />
           </TouchableOpacity>

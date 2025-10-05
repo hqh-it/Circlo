@@ -125,7 +125,7 @@ export default function PersonalInfo() {
                     height:width*0.03,
                     padding:5
                   }}/>
-                  <TouchableOpacity onPress={()=>router.push("/components/EditProfile")} >
+                  <TouchableOpacity onPress={()=>router.push("/screens/Profile/EditProfile")} >
                     <Text style={styles.editText}>Edit Profile</Text>
                   </TouchableOpacity>
               </View>
