@@ -1,21 +1,24 @@
-// components/ProductFeed.tsx
-import { useRouter } from 'expo-router';
-import { collection, getDocs } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native'; // 🔥 THÊM IMPORT
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
-import { db } from '../../firebaseConfig';
 import { useAuth } from '../../services/Auth/AuthContext';
+import { getProducts, getProductsBySeller } from '../../services/Product/productService';
 import ProductCard from './ProductCard';
 
-const {width} = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+interface ProductFeedProps {
+  mode?: 'global' | 'user'; 
+  userId?: string; 
+}
 
 interface Product {
   id: string;
@@ -35,8 +38,7 @@ interface Product {
   likedBy?: string[];
 }
 
-const ProductFeed = () => {
-  const router = useRouter();
+const ProductFeed = ({ mode = 'global', userId }: ProductFeedProps) => {
   const { user } = useAuth();
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,60 +47,48 @@ const ProductFeed = () => {
 
   const loadProducts = async () => {
     try {
-      console.log('Loading products from Firestore...');
+      console.log('🔄 ProductFeed: Loading products...');
+      let result;
+      if (mode === 'user' && userId) {
+        console.log('🔄 ProductFeed: Loading user products for:', userId);
+        result = await getProductsBySeller(userId);
+      } else {
+        result = await getProducts();
+      }
       
-      const productsRef = collection(db, 'products');
-      const querySnapshot = await getDocs(productsRef);
-      
-      const productsData: Product[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        productsData.push({
-          id: doc.id,
-          images: data.images || [],
-          title: data.title || '',
-          price: data.price || 0,
-          address: data.address || {},
-          likeCount: data.likeCount || 0,
-          sellerAvatar: data.sellerAvatar || '',
-          sellerName: data.sellerName || 'Unknown Seller',
-          condition: data.condition,
-          createdAt: data.createdAt,
-          status: data.status,
-          likedBy: data.likedBy || []
-        });
-      });
-      
-      console.log('Products loaded:', productsData.length);
-      
-      // Sort by creation date (newest first)
-      const sortedProducts = productsData.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(0);
-        const dateB = b.createdAt?.toDate?.() || new Date(0);
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      setProducts(sortedProducts);
+      if (result.success) {
+        console.log('✅ ProductFeed: Products loaded successfully:', result.products.length);
+        setProducts(result.products);
+      } else {
+        console.error('❌ ProductFeed: Failed to load products:', result.error);
+        setProducts([]); 
+      }
       
     } catch (error) {
-      console.error('Error loading products:', error);
+      console.error('❌ ProductFeed: Error in loadProducts:', error);
+      setProducts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  // 🔥 THÊM useFocusEffect GIỐNG PersonalInfo
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🎯 ProductFeed: Screen focused, reloading products...');
+      loadProducts();
+    }, [mode, userId]) // Thêm dependencies
+  );
+
+  // Load data khi component mount lần đầu
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [mode, userId]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadProducts();
-  };
-
-  const handleLikePress = (productId: string) => {
-    console.log('Like product:', productId);
   };
 
   if (loading) {
@@ -113,52 +103,54 @@ const ProductFeed = () => {
   if (products.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.emptyText}>No products found</Text>
-        <Text style={styles.emptySubText}>Be the first to list a product!</Text>
+        <Text style={styles.emptyText}>
+          {mode === 'user' ? "You haven't posted any products yet!" : "No products found"}
+        </Text>
+        <Text style={styles.emptySubText}>
+          {mode === 'user' ? "Start selling by adding your first product!" : "Be the first to list a product!"}
+        </Text>
       </View>
     );
   }
 
-    return (
+  return (
     <View style={styles.container}>
-        <FlatList
+      <FlatList
         data={products}
         renderItem={({ item }) => (
+          <View style={{ width: SCREEN_WIDTH }}>
             <ProductCard
-            product={item}
-            onLikePress={() => handleLikePress(item.id)}
-            isLiked={item.likedBy?.includes(user?.uid || '')}
+              product={item}
+              isLiked={item.likedBy?.includes(user?.uid || '')}
+              mode={mode === 'user' ? 'profile' : 'default'}
             />
+          </View>
         )}
         keyExtractor={(item) => item.id}
-        // ✅ BỎ numColumns để hiển thị dọc
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-            <RefreshControl
+          <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={['#00A86B']}
             tintColor={'#00A86B'}
-            />
+          />
         }
-        />
+      />
     </View>
-    );
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-    width:width,
+    paddingBottom: 40
   },
   listContent: {
     paddingVertical: 8,
-  },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingHorizontal: 0, 
   },
   centerContainer: {
     flex: 1,

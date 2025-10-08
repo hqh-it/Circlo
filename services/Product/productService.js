@@ -1,4 +1,3 @@
-// services/Product/productService.js
 import {
   addDoc,
   collection,
@@ -300,20 +299,14 @@ export const deleteProduct = async (productId) => {
 // Toggle product like
 export const toggleProductLike = async (productId, userId) => {
   try {
-    // This would typically involve a separate 'likes' collection
-    // For now, we'll just update the like count
     const docRef = doc(db, 'products', productId);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
       const currentLikes = docSnap.data().likeCount || 0;
-      
-      // In a real app, you'd check if user already liked this product
-      // For simplicity, we'll just increment/decrement
       await updateDoc(docRef, {
         likeCount: currentLikes + 1
       });
-      
       return {
         success: true,
         liked: true,
@@ -338,8 +331,6 @@ export const toggleProductLike = async (productId, userId) => {
 // Search products
 export const searchProducts = async (searchTerm, filters = {}) => {
   try {
-    // This is a simple implementation
-    // For better search, consider using Algolia or Firebase Extensions
     const { products } = await getProducts(filters);
     
     const searchResults = products.filter(product => 
@@ -363,4 +354,47 @@ export const searchProducts = async (searchTerm, filters = {}) => {
       total: 0
     };
   }
+};
+
+// FORMAT PRICE 
+export const formatPrice = (price) => {
+  if (!price && price !== 0) return '0';
+  
+  if (price >= 1000000) {
+    return `${(price / 1000000).toFixed(1)}TR`;
+  }
+  if (price >= 1000) {
+    return `${(price / 1000).toFixed(0)}K`;
+  }
+  return price.toString();
+};
+
+// function for ProductsCards
+export const getTimeAgo = (createdAt) => {
+  if (!createdAt) return 'Vừa xong';
+  
+  try {
+    const now = new Date();
+    const created = createdAt.toDate();
+    const nowTimestamp = now.getTime();
+    const createdTimestamp = created.getTime();
+    const diffInMinutes = Math.floor((nowTimestamp - createdTimestamp) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Vừa xong';
+    if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
+    return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+  } catch (error) {
+    return 'Vừa xong';
+  }
+};
+
+// FORMAT CONDITION TEXT - Cũng có thể chuyển vào service
+export const getConditionText = (condition) => {
+  const conditionMap = {
+    'like_new': '🆕 Like New (99%)',
+    'used_good': '👍 Good Condition (70%-80%)', 
+    'used_fair': '👌 Fair Condition (50%)'
+  };
+  return conditionMap[condition] || '';
 };

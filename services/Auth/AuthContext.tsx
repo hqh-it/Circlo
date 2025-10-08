@@ -1,4 +1,3 @@
-// services/Auth/AuthContext.tsx
 import { useRouter } from 'expo-router';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';

@@ -1,7 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Dimensions, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuth } from "../../services/Auth/AuthContext";
 import { loadUserProfile } from "../../services/User/userService";
 
@@ -70,163 +70,154 @@ export default function PersonalInfo() {
   }
 
   return (
-    <View style={styles.container}>
-        <View style={{width:width,flexDirection:"column", justifyContent:"space-between",}}>            
-            <ImageBackground source={require('../assets/images/background_profile.jpg')}>
-              {/* Avatar */}
-              <View style={{justifyContent:"center", alignItems:"center",paddingVertical:10}}>
-                  <Image
-                  source={
-                    userData?.avatarURL 
-                      ? { uri: userData.avatarURL } 
-                      : require("../assets/icons/profile-picture.png")
-                  }
-                  style={{
-                      width: width*0.35,
-                      height: width*0.35,
-                      borderRadius: 100,
-                      borderWidth:5,
-                      borderColor:"#D4A017",
-                      }}/>
+    <ScrollView>
+      <View style={styles.container}>
+          <View style={{width:width,flexDirection:"column", justifyContent:"space-between",}}>
+              <ImageBackground source={require('../assets/images/background_profile.jpg')}>
+                {/* Avatar */}
+                <View style={{justifyContent:"center", alignItems:"center",paddingVertical:10}}>
+                    <Image
+                    source={
+                      userData?.avatarURL
+                        ? { uri: userData.avatarURL }
+                        : require("../assets/icons/profile-picture.png")
+                    }
+                    style={{
+                        width: width*0.35,
+                        height: width*0.35,
+                        borderRadius: 100,
+                        borderWidth:5,
+                        borderColor:"#D4A017",
+                        }}/>
+                </View>
+                {/* Rate - Follow*/}
+                <View style={{
+                    width:width,
+                    flexDirection:"row",
+                    justifyContent:"space-around",
+                    alignItems:"center",
+                    paddingVertical:5,
+                    backgroundColor:"#f1aa05d5",
+                    }}>
+                    <View style={styles.ratingcolumn}>
+                      <Image style={styles.ratingicon} source={require('../assets/icons/strust2.png')} />
+                      <Text style={styles.ratingText}>Trust Score: 0</Text>
+                    </View>
+                    <View style={styles.ratingcolumn}>
+                      <Image style={styles.ratingicon}source={require('../assets/icons/follower.png')} />
+                      <Text style={styles.ratingText}>Followers: 0</Text>
+                    </View>
+                    <View style={styles.ratingcolumn}>
+                      <Image style={styles.ratingicon} source={require('../assets/icons/following.png')} />
+                      <Text style={styles.ratingText}>Following: 0</Text>
+                    </View>
+                </View>
+              </ImageBackground>
+          </View>
+          <View style={{width:width, flexDirection:"column", justifyContent:"center", alignItems:"center",paddingHorizontal:10}}>
+              <View style={{width:width, flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingHorizontal:10,padding:5,borderTopWidth:5,borderColor:"white"}} >
+                <Text style={styles.title}>Your Information</Text>
+                <View style={{flexDirection:"column",justifyContent:"space-between", alignItems:"center"}}>
+                    <Image source={require('../assets/icons/edit.png')}
+                    style={{
+                      width:width*0.03,
+                      height:width*0.03,
+                      padding:5
+                    }}/>
+                    <TouchableOpacity onPress={()=>router.push("/screens/Profile/EditProfile")} >
+                      <Text style={styles.editText}>Edit Profile</Text>
+                    </TouchableOpacity>
+                </View>
               </View>
-              {/* Rate - Follow*/}
-              <View style={{
-                  width:width,
-                  flexDirection:"row",
-                  justifyContent:"space-around",
-                  alignItems:"center",
-                  paddingVertical:5,
-                  backgroundColor:"#f1aa05d5",
-                  }}>
-                  <View style={styles.ratingcolumn}>
-                    <Image style={styles.ratingicon} source={require('../assets/icons/strust2.png')} />
-                    <Text style={styles.ratingText}>Trust Score: 0</Text>
-                  </View>
-                  <View style={styles.ratingcolumn}>
-                    <Image style={styles.ratingicon}source={require('../assets/icons/follower.png')} />
-                    <Text style={styles.ratingText}>Followers: 0</Text>
-                  </View>
-                  <View style={styles.ratingcolumn}>
-                    <Image style={styles.ratingicon} source={require('../assets/icons/following.png')} />
-                    <Text style={styles.ratingText}>Following: 0</Text>
-                  </View>
+              {/* Basic Information Card */}
+              <View style={styles.infoCard}>
+                <Text style={styles.cardTitle}>👤 Basic Information</Text>
+      
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Full Name:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData?.fullName, "Not added yet")}
+                  </Text>
+                </View>
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Email:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData?.email, "Not added yet")}
+                  </Text>
+                </View>
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Phone:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData?.phone, "Not added yet")}
+                  </Text>
+                </View>
               </View>
-            </ImageBackground>
-        </View>
-
-        <View style={{width:width, flexDirection:"column", justifyContent:"center", alignItems:"center",paddingHorizontal:10}}>
-            <View style={{width:width, flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingHorizontal:10,padding:5,borderTopWidth:5,borderColor:"white"}} >
-              <Text style={styles.title}>Your Information</Text>
-
-              <View style={{flexDirection:"column",justifyContent:"space-between", alignItems:"center"}}>
-                  <Image source={require('../assets/icons/edit.png')}
-                  style={{
-                    width:width*0.03,
-                    height:width*0.03,
-                    padding:5
-                  }}/>
-                  <TouchableOpacity onPress={()=>router.push("/screens/Profile/EditProfile")} >
-                    <Text style={styles.editText}>Edit Profile</Text>
-                  </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Basic Information Card */}
-            <View style={styles.infoCard}>
-              <Text style={styles.cardTitle}>👤 Basic Information</Text>
-              
-              <View style={styles.infoSection}>
-                <Text style={styles.infoLabel}>Full Name:</Text>
-                <Text style={styles.infoValue}>
-                  {displayValue(userData?.fullName, "Not added yet")}
-                </Text>
-              </View>
-
-              <View style={styles.infoSection}>
-                <Text style={styles.infoLabel}>Email:</Text>
-                <Text style={styles.infoValue}>
-                  {displayValue(userData?.email, "Not added yet")}
-                </Text>
-              </View>
-
-              <View style={styles.infoSection}>
-                <Text style={styles.infoLabel}>Phone:</Text>
-                <Text style={styles.infoValue}>
-                  {displayValue(userData?.phone, "Not added yet")}
-                </Text>
-              </View>
-            </View>
-
-            {/* Address Information Card - Only show if address exists */}
-            {(userData?.address?.street || userData?.address?.province || userData?.address?.district || userData?.address?.ward) && (
-              <View style={styles.addressCard}>
-                <Text style={styles.cardTitle}>📍 Address Information</Text>
-                
-                {userData.address.street && (
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>Street:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.address.street)}
-                    </Text>
-                  </View>
-                )}
-
-                {userData.address.ward && (
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>Ward:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.address.ward)}
-                    </Text>
-                  </View>
-                )}
-
-                {userData.address.district && (
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>District:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.address.district)}
-                    </Text>
-                  </View>
-                )}
-
-                {userData.address.province && (
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>Province:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.address.province)}
-                    </Text>
-                  </View>
-                )}
-
-                {/* Full Address Summary */}
-                {userData.address.fullAddress && (
-                  <View style={styles.fullAddressSection}>
-                    <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
-                    <Text style={styles.fullAddressText}>
-                      {userData.address.fullAddress}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Show message if no address data */}
-            {!(userData?.address?.street || userData?.address?.province) && (
-              <View style={styles.noDataCard}>
-                <Text style={styles.noDataText}>📍 No address information added yet</Text>
-                <Text style={styles.noDataSubtext}>Click "Edit Profile" to add your address</Text>
-              </View>
-            )}
-        </View>    
-        
-        {/* Logout Section */}
-        <View style={styles.logoutSection}>
-            <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-              <Text style={styles.logoutText}>🚪 Logout</Text> 
-            </TouchableOpacity>
-        </View>   
-                                               
-    </View>
+              {/* Address Information Card - Only show if address exists */}
+              {(userData?.address?.street || userData?.address?.province || userData?.address?.district || userData?.address?.ward) && (
+                <View style={styles.addressCard}>
+                  <Text style={styles.cardTitle}>📍 Address Information</Text>
+      
+                  {userData.address.street && (
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>Street:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.address.street)}
+                      </Text>
+                    </View>
+                  )}
+                  {userData.address.ward && (
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>Ward:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.address.ward)}
+                      </Text>
+                    </View>
+                  )}
+                  {userData.address.district && (
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>District:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.address.district)}
+                      </Text>
+                    </View>
+                  )}
+                  {userData.address.province && (
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>Province:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.address.province)}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Full Address Summary */}
+                  {userData.address.fullAddress && (
+                    <View style={styles.fullAddressSection}>
+                      <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
+                      <Text style={styles.fullAddressText}>
+                        {userData.address.fullAddress}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {/* Show message if no address data */}
+              {!(userData?.address?.street || userData?.address?.province) && (
+                <View style={styles.noDataCard}>
+                  <Text style={styles.noDataText}>📍 No address information added yet</Text>
+                  <Text style={styles.noDataSubtext}>Click "Edit Profile" to add your address</Text>
+                </View>
+              )}
+          </View>
+      
+          {/* Logout Section */}
+          <View style={styles.logoutSection}>
+              <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+                <Text style={styles.logoutText}>🚪 Logout</Text>
+              </TouchableOpacity>
+          </View>
+      
+      </View>
+    </ScrollView>
   );
 }
 

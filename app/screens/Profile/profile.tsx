@@ -1,12 +1,14 @@
 import React from "react";
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../../services/Auth/AuthContext";
 import Header from "../../components/header_for_detail";
 import PersonalInfo from "../../components/PersonalInfo";
+import ProductFeed from "../../components/ProductFeed";
 const {height,width} = Dimensions.get("window");
 
 export default function Profile(){
-
+    const { user } = useAuth(); 
     const [selectedTab, setSelectedTab] = React.useState("Information");
         const tabColors:any= {
         Information:"#e4f6efff", 
@@ -37,13 +39,11 @@ export default function Profile(){
                     </Text>
                 </TouchableOpacity>                
                 </View>
-                <ScrollView>
                     <View style={[styles.contentBox,  {backgroundColor: tabColors[selectedTab] }]}>
                     {selectedTab === "Information" && <PersonalInfo/>}
-                    {selectedTab === "Product" && <Text>You haven't post any product yet!</Text>}
+                    {selectedTab === "Product" && (<ProductFeed mode="user" userId={user?.uid}/>)}
                     {selectedTab === "History" && <Text>You haven't buy any product!</Text>}
                     </View>
-                </ScrollView>
         </SafeAreaView>
     );
 }

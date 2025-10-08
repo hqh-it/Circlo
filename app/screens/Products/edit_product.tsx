@@ -1,24 +1,26 @@
 import { Picker } from '@react-native-picker/picker';
 import { ResizeMode, Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../services/Auth/AuthContext';
-import { createProduct } from '../../../services/Product/productService';
+import { getProductById, updateProduct } from '../../../services/Product/productService';
 import { fetchDistricts, fetchProvinces, fetchWards, getAddressNames, getFullAddress } from '../../../services/User/address';
 import { loadUserData } from '../../../services/User/userService';
 import AddressPicker from '../../components/AddressPicker';
 import Header from "../../components/header_for_detail";
+
 
 interface Category {
   label: string;
@@ -47,8 +49,12 @@ interface UserAddress {
   wardCode?: string;
 }
 
-const AddProduct = () => {
+const EditProduct = () => {
+  const router = useRouter();
+  const { productId } = useLocalSearchParams();
   const { user } = useAuth();
+  
+  // State for product data
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [condition, setCondition] = useState<string>('like_new');
@@ -56,7 +62,8 @@ const AddProduct = () => {
   const [category, setCategory] = useState<string>('');
   const [images, setImages] = useState<string[]>([]); 
   const [video, setVideo] = useState<string | null>(null); 
-  const [loading, setLoading] = useState<boolean>(false); 
+  const [loading, setLoading] = useState<boolean>(false);
+  const [initialLoading, setInitialLoading] = useState<boolean>(true);
   
   // State for address data
   const [provinces, setProvinces] = useState<AddressItem[]>([]);
@@ -76,6 +83,9 @@ const AddProduct = () => {
   const [customAddressConfirmed, setCustomAddressConfirmed] = useState<boolean>(false);
   const [customAddressFull, setCustomAddressFull] = useState<string>('');
 
+  // Store original product data for comparison
+  const [originalProduct, setOriginalProduct] = useState<any>(null);
+
   const categories: Category[] = [
     { label: 'Select Category', value: '' },
     { label: '👕 Fashion - Accessories', value: 'fashion' },
@@ -91,6 +101,67 @@ const AddProduct = () => {
     { label: 'Fair Condition (50%)', value: 'used_fair' }
   ];
 
+  // Load product data when component mounts
+  useEffect(() => {
+    const loadProductData = async () => {
+    if (!productId) {
+        Alert.alert('Error', 'Product ID not found');
+        router.back();
+        return;
+    }
+
+    try {
+        setInitialLoading(true);
+        console.log('Loading product data for ID:', productId);
+        
+        const result = await getProductById(productId as string);
+        
+        if (result.success && result.product) {
+        const product = result.product as any;      
+        setOriginalProduct(product);
+        
+        // Populate form with existing data
+        setTitle(product.title || '');
+        setDescription(product.description || '');
+        setCondition(product.condition || 'like_new');
+        setPrice(product.price ? product.price.toString() : '');
+        setCategory(product.category || '');
+        setImages(product.images || []);
+        setVideo(product.video || null);
+        
+        // Handle address data
+        if (product.address) {
+            if (product.address.useDefault === false) {
+            // Custom address was used
+            setUseDefaultAddress(false);
+            setCustomStreet(product.address.street || '');
+            setCustomProvince(product.address.provinceCode || '');
+            setCustomDistrict(product.address.districtCode || '');
+            setCustomWard(product.address.wardCode || '');
+            setCustomAddressFull(product.address.fullAddress || '');
+            setCustomAddressConfirmed(true);
+            } else {
+            setUseDefaultAddress(true);
+            }
+        }
+        
+        console.log('Product data loaded successfully');
+        } else {
+        Alert.alert('Error', result.error || 'Failed to load product');
+        router.back();
+        }
+    } catch (error) {
+        console.error('Error loading product:', error);
+        Alert.alert('Error', 'Failed to load product data');
+        router.back();
+    } finally {
+        setInitialLoading(false);
+    }
+    };
+
+    loadProductData();
+  }, [productId]);
+
   // Load provinces on mount
   useEffect(() => {
     const data = fetchProvinces();
@@ -102,9 +173,12 @@ const AddProduct = () => {
     if (customProvince) {
       const data = fetchDistricts(customProvince);
       setDistricts(Array.isArray(data) ? data : []);
-      setCustomDistrict('');
-      setCustomWard('');
-      setWards([]);
+      // Don't reset district if we're loading existing data
+      if (!originalProduct) {
+        setCustomDistrict('');
+        setCustomWard('');
+        setWards([]);
+      }
     }
   }, [customProvince]);
 
@@ -113,7 +187,10 @@ const AddProduct = () => {
     if (customDistrict) {
       const data = fetchWards(customDistrict);
       setWards(Array.isArray(data) ? data : []);
-      setCustomWard('');
+      // Don't reset ward if we're loading existing data
+      if (!originalProduct) {
+        setCustomWard('');
+      }
     }
   }, [customDistrict]);
 
@@ -329,7 +406,7 @@ const AddProduct = () => {
         };
       }
 
-      console.log('Creating product with data:', {
+      console.log('Updating product with data:', {
         title,
         description,
         condition,
@@ -340,39 +417,25 @@ const AddProduct = () => {
         address: addressData
       });
 
-      const result = await createProduct(
-        {
-          title,
-          description,
-          price,
-          condition,
-          category,
-          images,
-          video,
-          address: addressData
-        },
-        user.uid,
-        userData
-      );
+      const updateData = {
+        title: title.trim(),
+        description: description.trim(),
+        price: parseFloat(price),
+        condition,
+        category,
+        images,
+        video,
+        address: addressData,
+        updatedAt: new Date() // Use client timestamp for immediate update
+      };
+
+      const result = await updateProduct(productId as string, updateData);
 
       if (result.success) {
-        Alert.alert('Success', 'Product has been listed successfully!');
-        // Reset form
-        setTitle('');
-        setDescription('');
-        setPrice('');
-        setCategory('');
-        setImages([]);
-        setVideo(null);
-        setCustomAddressConfirmed(false);
-        setCustomStreet('');
-        setCustomProvince('');
-        setCustomDistrict('');
-        setCustomWard('');
-        setCustomAddressFull('');
-        console.log('Product created with ID:', result.productId);
+        Alert.alert('Success', 'Product has been updated successfully!');
+        router.back();
       } else {
-        Alert.alert('Error', result.error || 'Failed to create product');
+        Alert.alert('Error', result.error || 'Failed to update product');
       }
     } catch (error: any) {
       console.error('Error in handleSubmit:', error);
@@ -382,11 +445,26 @@ const AddProduct = () => {
     }
   };
 
+  const handleCancel = (): void => {
+    router.back();
+  };
+
+  if (initialLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header title="Edit Product" />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading product data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Add Product" />
+      <Header title="Edit Product" />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Product Information</Text>
+        <Text style={styles.sectionTitle}>Edit Product Information</Text>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Title *</Text>
@@ -645,19 +723,31 @@ const AddProduct = () => {
           )}
         </View>
 
-        <TouchableOpacity 
-          style={[
-            styles.submitButton, 
-            ((!useDefaultAddress && !customAddressConfirmed) || loading) && styles.submitButtonDisabled
-          ]} 
-          onPress={handleSubmit}
-          disabled={(!useDefaultAddress && !customAddressConfirmed) || loading}
-        >
-          <Text style={styles.submitButtonText}>
-            {loading ? 'Creating Product...' : 
-             (!useDefaultAddress && !customAddressConfirmed) ? 'Please confirm address' : 'Add Product'}
-          </Text>
-        </TouchableOpacity>
+        {/* Action Buttons */}
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.cancelButton]} 
+            onPress={handleCancel}
+            disabled={loading}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[
+              styles.actionButton, 
+              styles.submitButton, 
+              ((!useDefaultAddress && !customAddressConfirmed) || loading) && styles.submitButtonDisabled
+            ]} 
+            onPress={handleSubmit}
+            disabled={(!useDefaultAddress && !customAddressConfirmed) || loading}
+          >
+            <Text style={styles.submitButtonText}>
+              {loading ? 'Updating Product...' : 
+              (!useDefaultAddress && !customAddressConfirmed) ? 'Please confirm address' : 'Update Product'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -673,6 +763,15 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#00A86B',
   },
   sectionTitle: {
     fontSize: 22,
@@ -967,30 +1066,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  submitButton: {
-    backgroundColor: '#00A86B',
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginVertical: 20,
+  },
+  actionButton: {
+    flex: 1,
     padding: 18,
     borderRadius: 16,
     alignItems: 'center',
-    marginVertical: 20,
     shadowColor: '#00A86B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
   },
+  cancelButton: {
+    backgroundColor: '#6c757d',
+  },
+  submitButton: {
+    backgroundColor: '#00A86B',
+  },
   submitButtonDisabled: {
     backgroundColor: '#cccccc',
-  },  
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   submitButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    letterSpacing: 1,
   },
   spacer: {
     height: 30,
   },
 });
 
-export default AddProduct;
+export default EditProduct;

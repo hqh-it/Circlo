@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from "../../../services/Auth/AuthContext";
 import { uploadAvatar } from '../../../services/cloudinaryService';
 import { fetchDistricts, fetchProvinces, fetchWards, getFullAddress, loadAddressHierarchy } from "../../../services/User/address";
@@ -63,8 +64,6 @@ export default function EditProfile() {
         // Load user data from service
         const userData = await loadUserData(user);
         if (userData) {
-
-
           setName(userData.fullName || "");
           setEmail(userData.email || "");
           setPhone(userData.phone || "");
@@ -77,7 +76,6 @@ export default function EditProfile() {
             userData.address?.districtCode, 
             userData.address?.wardCode
           );
-
           
           setProvinces(addressData.provinces);
           setDistricts(addressData.districts);
@@ -134,78 +132,75 @@ export default function EditProfile() {
 
   // Handle save 
   const handleSave = async () => {
-  try {
-    setSaving(true);
-    
-    let finalAvatarURL = avatar;
-
-    // Upload new avatar if exists
-    if (newAvatar) {
-      console.log('Uploading new avatar to Cloudinary...');
-      const uploadResult = await uploadAvatar(newAvatar, user!.uid);
+    try {
+      setSaving(true);
       
-      if (uploadResult.success && uploadResult.url) {
-        finalAvatarURL = uploadResult.url;
-        console.log('Avatar uploaded successfully:', finalAvatarURL);
-      } else {
-        Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload avatar');
-        return;
-      }
-    }
+      let finalAvatarURL = avatar;
 
-    const userData = { 
-      name, 
-      phone, 
-      avatar: finalAvatarURL,
-    };
-    
-    const addressData = { 
-      selectedProvince, 
-      selectedDistrict, 
-      selectedWard, 
-      street, 
-      provinces, 
-      districts, 
-      wards 
-    };
-    
-    const result = await saveUserProfile(user!, userData, addressData);
-    
-    // Update state
-    if (finalAvatarURL !== avatar) {
-      setAvatar(finalAvatarURL);
-    }
-    setNewAvatar(null);
-    
-    Alert.alert("Success", "Profile updated successfully!", [
-    { 
-      text: "OK", 
-      onPress: () => router.back() 
-    }
-    ]);   
-  } catch (error: any) {
-    Alert.alert("Error", error.message);
-  } finally {
-    setSaving(false);
+      // Upload new avatar if exists
+      if (newAvatar) {
+        console.log('Uploading new avatar to Cloudinary...');
+        const uploadResult = await uploadAvatar(newAvatar, user!.uid);
+        
+        if (uploadResult.success && uploadResult.url) {
+          finalAvatarURL = uploadResult.url;
+          console.log('Avatar uploaded successfully:', finalAvatarURL);
+        } else {
+          Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload avatar');
+          return;
+        }
+      }
+
+      const userData = { 
+        name, 
+        phone, 
+        avatar: finalAvatarURL,
+      };
+      
+      const addressData = { 
+        selectedProvince, 
+        selectedDistrict, 
+        selectedWard, 
+        street, 
+        provinces, 
+        districts, 
+        wards 
+      };
+      
+      const result = await saveUserProfile(user!, userData, addressData);
+      
+      // Update state
+      if (finalAvatarURL !== avatar) {
+        setAvatar(finalAvatarURL);
+      }
+      setNewAvatar(null);
+      
+      Alert.alert("Success", "Profile updated successfully!", [
+        { 
+          text: "OK", 
+          onPress: () => router.back() 
+        }
+      ]);   
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-    const handleCancel = () => {
-      router.back();
-    };
+  const handleCancel = () => {
+    router.back();
+  };
 
   // Get display value for inputs
   const getDisplayValue = (value: string, focused: boolean, placeholder: string) => {
-    // If user is currently typing or has value, show actual value
     if (focused || value) return value;
-    // Otherwise show placeholder
     return placeholder;
   };
 
   // Handle phone input focus
   const handlePhoneFocus = () => {
     setPhoneFocused(true);
-    // Clear placeholder text when user starts typing
     if (!phone) {
       setPhone("");
     }
@@ -214,7 +209,6 @@ export default function EditProfile() {
   // Handle street input focus
   const handleStreetFocus = () => {
     setStreetFocused(true);
-    // Clear placeholder text when user starts typing
     if (!street) {
       setStreet("");
     }
@@ -232,78 +226,85 @@ export default function EditProfile() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         <Header title="Edit Profile" />
         <View style={styles.loadingContainer}>
-          <Text>Loading information...</Text>
+          <Text style={styles.loadingText}>Loading information...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Custom header */}
+    <SafeAreaView style={styles.safeArea}>
       <Header title="Edit Profile" />
-
-      {/* Avatar section */}
-      <ImageBackground
-        source={require('../../assets/images/background_profile.jpg')}
-        style={styles.headerBackground}
-        imageStyle={{ borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}
-      >
-        <View>
-          <Image
-            source={
-              newAvatar 
-                ? { uri: newAvatar } // Hiển thị avatar mới nếu có
-                : avatar 
-                  ? { uri: avatar } // Hiển thị avatar cũ
-                  : require("../../assets/icons/profile-picture.png")
-            }
-            style={styles.avatar}/>
-          {/* Change avatar button */}
-          <TouchableOpacity style={styles.changeAvatarBtn} onPress={pickImage}>
+      
+      {/* Avatar Section */}
+      <View style={styles.avatarSection}>
+        <ImageBackground
+          source={require('../../assets/images/background_profile.jpg')}
+          style={styles.avatarBackground}
+          imageStyle={styles.avatarBackgroundImage}
+        >
+          <View style={styles.avatarContainer}>
             <Image
-              source={require('../../assets/icons/avatar.png')}
-              style={styles.changeAvatarIcon}
+              source={
+                newAvatar 
+                  ? { uri: newAvatar }
+                  : avatar 
+                    ? { uri: avatar }
+                    : require("../../assets/icons/profile-picture.png")
+              }
+              style={styles.avatar}
             />
-          </TouchableOpacity>
-        </View>
-      </ImageBackground>
+            <TouchableOpacity style={styles.changeAvatarBtn} onPress={pickImage}>
+              <Image
+                source={require('../../assets/icons/avatar.png')}
+                style={styles.changeAvatarIcon}
+              />
+            </TouchableOpacity>
+          </View>
+        </ImageBackground>
+      </View>
 
-      {/* Form content */}
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.formWrapper}>
+      {/* Form Content */}
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.formContainer}>
           <Text style={styles.sectionTitle}>User Information</Text>
 
           {/* Name */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Full name:</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Full Name</Text>
             <TextInput 
               style={styles.input} 
               value={name}
               onChangeText={setName}
               placeholder="Enter your full name"
+              placeholderTextColor="#999"
             />
           </View>
 
           {/* Email */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Email:</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
             <TextInput 
-              style={styles.input} 
+              style={[styles.input, styles.disabledInput]} 
               value={email}
               onChangeText={setEmail}
               placeholder="Your email"
               keyboardType="email-address"
               editable={false}
+              placeholderTextColor="#999"
             />
           </View>
 
           {/* Phone */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Phone:</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
             <TextInput 
               style={styles.input} 
               value={getDisplayValue(phone, phoneFocused, "Phone number not set")}
@@ -312,12 +313,13 @@ export default function EditProfile() {
               keyboardType="phone-pad"
               onFocus={handlePhoneFocus}
               onBlur={handlePhoneBlur}
+              placeholderTextColor="#999"
             />
           </View>
 
           {/* House Number & Street */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>House & Street:</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>House & Street</Text>
             <TextInput 
               style={[styles.input, styles.multilineInput]} 
               value={getDisplayValue(street, streetFocused, "Address not set")}
@@ -327,13 +329,14 @@ export default function EditProfile() {
               textAlignVertical="top"
               onFocus={handleStreetFocus}
               onBlur={handleStreetBlur}
+              placeholderTextColor="#999"
             />
           </View>
 
           {/* Province */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Province:</Text>
-            <View style={styles.dropdownWrapper}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Province/City</Text>
+            <View style={styles.dropdownContainer}>
               <AddressPicker
                 items={provinces}
                 selectedValue={selectedProvince}
@@ -344,9 +347,9 @@ export default function EditProfile() {
           </View>
 
           {/* District */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>District:</Text>
-            <View style={styles.dropdownWrapper}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>District</Text>
+            <View style={styles.dropdownContainer}>
               <AddressPicker
                 items={districts}
                 selectedValue={selectedDistrict}
@@ -358,9 +361,9 @@ export default function EditProfile() {
           </View>
 
           {/* Ward */}
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Ward:</Text>
-            <View style={styles.dropdownWrapper}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Ward</Text>
+            <View style={styles.dropdownContainer}>
               <AddressPicker
                 items={wards}
                 selectedValue={selectedWard}
@@ -371,43 +374,45 @@ export default function EditProfile() {
             </View>
           </View>
 
-          {/* Enhanced Address Preview - Always show when any address field is selected */}
+          {/* Address Preview */}
           {(selectedProvince || selectedDistrict || selectedWard || street) && (
             <View style={styles.addressPreview}>
               <Text style={styles.previewTitle}>📍 Address Preview</Text>
               
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Street:</Text>
-                <Text style={styles.previewValue}>
-                  {street || "Not specified"}
-                </Text>
+              <View style={styles.previewGrid}>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Street:</Text>
+                  <Text style={styles.previewValue}>
+                    {street || "Not specified"}
+                  </Text>
+                </View>
+
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Ward:</Text>
+                  <Text style={styles.previewValue}>
+                    {selectedWard ? wards.find(w => w.code === selectedWard)?.name : "Not selected"}
+                  </Text>
+                </View>
+
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>District:</Text>
+                  <Text style={styles.previewValue}>
+                    {selectedDistrict ? districts.find(d => d.code === selectedDistrict)?.name : "Not selected"}
+                  </Text>
+                </View>
+
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Province:</Text>
+                  <Text style={styles.previewValue}>
+                    {selectedProvince ? provinces.find(p => p.code === selectedProvince)?.name : "Not selected"}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Ward:</Text>
-                <Text style={styles.previewValue}>
-                  {selectedWard ? wards.find(w => w.code === selectedWard)?.name : "Not selected"}
-                </Text>
-              </View>
-
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>District:</Text>
-                <Text style={styles.previewValue}>
-                  {selectedDistrict ? districts.find(d => d.code === selectedDistrict)?.name : "Not selected"}
-                </Text>
-              </View>
-
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Province:</Text>
-                <Text style={styles.previewValue}>
-                  {selectedProvince ? provinces.find(p => p.code === selectedProvince)?.name : "Not selected"}
-                </Text>
-              </View>
-
-              {/* Full address summary */}
+              {/* Full Address Summary */}
               {(selectedProvince && selectedDistrict && selectedWard && street) && (
                 <View style={styles.fullAddressSection}>
-                  <Text style={styles.fullAddressTitle}>📬 Complete Address:</Text>
+                  <Text style={styles.fullAddressTitle}>📬 Complete Address</Text>
                   <Text style={styles.fullAddressText}>
                     {getFullAddress(selectedProvince, selectedDistrict, selectedWard, street, provinces, districts, wards)}
                   </Text>
@@ -418,202 +423,277 @@ export default function EditProfile() {
         </View>
       </ScrollView>
 
-      {/* Action buttons */}
-      <View style={styles.btnRow}>
+      {/* Action Buttons */}
+      <View style={styles.actionBar}>
         <TouchableOpacity 
-          style={[styles.btn, styles.btnCancel]} 
+          style={[styles.actionButton, styles.cancelButton]} 
           onPress={handleCancel}
           disabled={saving}
         >
-          <Text style={styles.btnText}>Cancel</Text>
+          <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
+        
         <TouchableOpacity 
-          style={[styles.btn, styles.btnSave, saving && styles.btnDisabled]} 
+          style={[styles.actionButton, styles.saveButton, saving && styles.disabledButton]} 
           onPress={handleSave}
           disabled={saving}
         >
-          <Text style={styles.btnText}>
-            {saving ? "Saving..." : "Save"}
+          <Text style={styles.saveButtonText}>
+            {saving ? "Saving..." : "Save Changes"}
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
-
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: "#f8f8f8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  headerBackground: {
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-  avatar: {
-    width: width * 0.35,
-    height: width * 0.35,
-    borderRadius: 100,
-    borderWidth: 4,
-    borderColor: "#D4A017",
-  },
-  changeAvatarBtn: {
-    position: "absolute",
-    bottom: 5,
-    right: width * 0.28 / 2,
-    backgroundColor: "#D4A017",
-    borderRadius: 20,
-    padding: 6,
-    elevation: 3,
-  },
-  changeAvatarIcon: {
-    width: 20,
-    height: 20,
-    tintColor: "#ffffffff"
-  },
-  formWrapper: {
-    flex: 1,
-    marginTop: 15,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#ffb012ff",
-    alignSelf: "center",
-    marginVertical: 15,
-    borderBottomWidth: 3,
-    borderColor: "#ffb012ff",
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  label: {
-    width: "35%",
-    fontWeight: "600",
-    fontSize: 14,
-    color: "#444",
-    textAlign: "right",
-    paddingRight: 10
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    borderWidth: 1.5,
-    borderColor: "#00A86B",
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 45,
-  },
-  multilineInput: {
-    minHeight: 45,
-    maxHeight: 120,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  dropdownWrapper: {
-    flex: 1,
-  },
-  btnRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    backgroundColor: "#f8f8f8",
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-  },
-  btn: {
-    width: "40%",
-    paddingVertical: 12,
-    borderRadius: 20,
-    alignItems: "center",
-    elevation: 2,
-  },
-  btnSave: {
-    backgroundColor: "#00A86B",
-  },
-  btnCancel: {
-    backgroundColor: "#e97575ff",
-  },
-  btnDisabled: {
-    backgroundColor: "#cccccc",
-  },
-  btnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600"
-  },
-  addressPreview: {
-    marginTop: 20,
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#00A86B',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  previewTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00A86B',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  previewSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingVertical: 4,
-  },
-  previewLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#555',
-    width: '30%',
-  },
-  previewValue: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    width: '68%',
-    textAlign: 'right',
-  },
-  fullAddressSection: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  fullAddressTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#00A86B',
-    marginBottom: 6,
-  },
-  fullAddressText: {
-    fontSize: 13,
-    color: '#333',
-    lineHeight: 18,
-    fontStyle: 'italic',
+    backgroundColor: "#ffffff",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  
+  // Avatar Section
+  avatarSection: {
+    backgroundColor: '#ffffff',
+  },
+  avatarBackground: {
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarBackgroundImage: {
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+  },
+  avatarContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: '#ffffff',
+    backgroundColor: '#f8f8f8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  changeAvatarBtn: {
+    position: 'absolute',
+    bottom: 5,
+    right: -5,
+    backgroundColor: '#00A86B',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  changeAvatarIcon: {
+    width: 18,
+    height: 18,
+    tintColor: '#ffffff',
+  },
+
+  // Scroll View
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+
+  // Form Container
+  formContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    marginBottom: 30,
+    letterSpacing: 0.5,
+  },
+
+  // Input Groups
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2d3748',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#1a1a1a',
+    fontWeight: '500',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  disabledInput: {
+    backgroundColor: '#f7fafc',
+    borderColor: '#e2e8f0',
+    color: '#a0aec0',
+  },
+  multilineInput: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+    paddingTop: 14,
+  },
+
+  // Dropdown
+  dropdownContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+
+  // Address Preview
+  addressPreview: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 10,
+    borderWidth: 2,
+    borderColor: '#00A86B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00A86B',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  previewGrid: {
+    gap: 12,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  previewLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4a5568',
+    flex: 1,
+  },
+  previewValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#2d3748',
+    flex: 2,
+    textAlign: 'right',
+  },
+  fullAddressSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  fullAddressTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#00A86B',
+    marginBottom: 8,
+  },
+  fullAddressText: {
+    fontSize: 14,
+    color: '#4a5568',
+    lineHeight: 20,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+
+  // Action Bar
+  actionBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  cancelButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#e53e3e',
+  },
+  saveButton: {
+    backgroundColor: '#00A86B',
+  },
+  disabledButton: {
+    backgroundColor: '#a0aec0',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#e53e3e',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
 });
