@@ -15,9 +15,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../services/Auth/AuthContext';
+import { chatService } from '../../../services/Chat/chatService';
 import { getProductById, toggleProductLike } from '../../../services/Product/productService';
 import CommentSection from '../../components/CommentSection';
 import Header from '../../components/header_for_detail';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ProductDetail {
@@ -56,7 +58,6 @@ const ProductDetailScreen = () => {
   const [mediaIndex, setMediaIndex] = useState(0);
   const [liking, setLiking] = useState(false);
   const [videoRef, setVideoRef] = useState<any>(null);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   const productId = params.id as string;
 
@@ -87,7 +88,6 @@ const ProductDetailScreen = () => {
     loadProductDetail();
   }, [productId, router]);
 
-  // CHỈ lấy images, không bao gồm video
   const imageItems = product?.images || [];
 
   const handleLikePress = async () => {
@@ -117,28 +117,68 @@ const ProductDetailScreen = () => {
     }
   };
 
-  const handleVideoPlayPause = async () => {
-    if (videoRef) {
-      if (isVideoPlaying) {
-        await videoRef.pauseAsync();
-        setIsVideoPlaying(false);
-      } else {
-        await videoRef.playAsync();
-        setIsVideoPlaying(true);
-      }
-    }
-  };
+  const handleContactSeller = async () => {
+  if (!product || !user) {
+    Alert.alert('Nofification', 'Please log in to your account for chat with seller');
+    return;
+  }
+  try {
+    console.log('🔄 Bắt đầu tạo/tìm phòng chat...');
+    
+    const createData = {
+      participants: [user.uid, product.sellerId],
+      
+      participantDetails: {
+        [user.uid]: {
+          name: user.displayName || 'You', 
+          avatar: user.photoURL || ''
+        },
 
-  const handleContactSeller = () => {
-    if (!product) return;
-    Alert.alert(
-      'Contact Seller',
-      `Would you like to contact ${product.sellerName} about "${product.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Contact', onPress: () => console.log('Contact seller:', product.sellerId) }
-      ]
-    );
+        [product.sellerId]: {
+          name: product.sellerName, 
+          avatar: product.sellerAvatar || ''
+        }
+      },
+
+      productId: product.id,
+      productInfo: {
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        images: product.images,
+        sellerId: product.sellerId
+      },
+      type: 'direct'
+    };
+
+    
+    const  result = await chatService.createOrGetChannel(createData);
+    
+    if (result.success) {
+      console.log('✅ Phòng chat:', result.channelId);
+
+      const productInfo = {
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        images: product.images,
+        sellerId: product.sellerId
+      };
+
+      router.push({
+        pathname: '../../screens/Chat/chatScreen',
+        params: {
+          channelId: result.channelId,
+          productData: JSON.stringify(productInfo) 
+        }
+      });
+    } else {
+      Alert.alert('Lỗi', 'Không thể tạo phòng chat: ' + result.error);
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tạo phòng chat:', error);
+    Alert.alert('Lỗi', 'Không thể bắt đầu chat với người bán');
+  }
   };
 
   const handleMakeOffer = () => {
@@ -173,7 +213,6 @@ const ProductDetailScreen = () => {
     );
   };
 
-  // Render video section - ĐIỀU CHỈNH KÍCH THƯỚC
   const renderVideoSection = () => {
     if (!product?.video) {
       return (
@@ -277,7 +316,7 @@ const ProductDetailScreen = () => {
           </View>
         </View>
 
-        {/* Video Section - RIÊNG BIỆT */}
+
         {renderVideoSection()}
 
         {/* Main Product Info Section */}
@@ -386,9 +425,12 @@ const ProductDetailScreen = () => {
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.contactButton}
-          onPress={handleContactSeller}
-        >
-          <Text style={styles.contactButtonText}>💬 Contact Seller</Text>
+          onPress={handleContactSeller}>
+            
+          <Text style={styles.contactButtonText}
+          onPress={handleContactSeller} >
+            💬 Contact Seller
+          </Text>
         </TouchableOpacity>
         
         <TouchableOpacity 

@@ -18,6 +18,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 interface ProductFeedProps {
   mode?: 'global' | 'user'; 
   userId?: string; 
+  onProductDeleted?: () => void; 
 }
 
 interface Product {
@@ -38,7 +39,7 @@ interface Product {
   likedBy?: string[];
 }
 
-const ProductFeed = ({ mode = 'global', userId }: ProductFeedProps) => {
+const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedProps) => {
   const { user } = useAuth();
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -73,15 +74,23 @@ const ProductFeed = ({ mode = 'global', userId }: ProductFeedProps) => {
     }
   };
 
-  // 🔥 THÊM useFocusEffect GIỐNG PersonalInfo
+    const handleProductDeleted = () => {
+    console.log('🔄 ProductFeed: Product deleted, reloading...');
+    loadProducts(); 
+    if (onProductDeleted) {
+      onProductDeleted(); 
+    }
+  };
+
+
   useFocusEffect(
     useCallback(() => {
       console.log('🎯 ProductFeed: Screen focused, reloading products...');
       loadProducts();
-    }, [mode, userId]) // Thêm dependencies
+    }, [mode, userId]) 
   );
 
-  // Load data khi component mount lần đầu
+
   useEffect(() => {
     loadProducts();
   }, [mode, userId]);
@@ -123,6 +132,7 @@ const ProductFeed = ({ mode = 'global', userId }: ProductFeedProps) => {
               product={item}
               isLiked={item.likedBy?.includes(user?.uid || '')}
               mode={mode === 'user' ? 'profile' : 'default'}
+              onProductDeleted={handleProductDeleted} 
             />
           </View>
         )}

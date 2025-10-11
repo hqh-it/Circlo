@@ -16,7 +16,7 @@ export default function Appheader(){
             
             <Image style={styles.logo} source={require('../assets/images/logo.png')}></Image>
             <TouchableOpacity onPress={()=>router.push("/screens/Profile/profile")}>
-              <Image style={styles.icon} source={require('../assets/images/avatar.png')}></Image>
+              <Image style={styles.profile} source={require('../assets/icons/user.png')}></Image>
             </TouchableOpacity>
         </View>
     );
@@ -39,6 +39,10 @@ const styles = StyleSheet.create({
   logo:{
     height: height* 0.07,
     width:width*0.17, 
+  },
+  profile:{
+    height: width*0.1,
+    width:width*0.1, 
   },
   icon:{
     height:height*0.05,

@@ -6,6 +6,7 @@ const { height, width } = Dimensions.get("window");
 
 export default function Appfooter() {
   const router = useRouter();
+  
   return (
     <View style={styles.container}>
 
@@ -15,24 +16,28 @@ export default function Appfooter() {
         end={{ x: 1, y: 0 }}
         style={styles.gradient}
       >
-        <TouchableOpacity>
+        {/* Home Button */}
+        <TouchableOpacity >
           <Image style={styles.icon} source={require("../assets/icons/home.png")} />
         </TouchableOpacity>
 
+        {/* Auction Button */}
         <TouchableOpacity>
           <Image style={styles.icon} source={require("../assets/icons/auction.png")} />
         </TouchableOpacity>
 
         <View style={{ width: width*0.01 }} />
 
+        {/* Notification Button */}
         <TouchableOpacity>
           <Image style={styles.icon} source={require("../assets/icons/bell.png")} />
         </TouchableOpacity>
 
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/screens/Chat/chatListScreen")}>
           <Image style={styles.icon} source={require("../assets/icons/chat.png")} />
         </TouchableOpacity>
       </LinearGradient>
+      
       <View style={styles.under_main_button}>
         <TouchableOpacity style={styles.main_button} onPress={()=> router.push('/screens/Products/add_product')}>
             <Image style={styles.icon} source={require("../assets/icons/flus.png")} />
@@ -44,12 +49,12 @@ export default function Appfooter() {
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    bottom: 15,
-    left: 0,
-    right: 0,
+    bottom: 0,
+    left:0,
+    right:0,
     height: height * 0.085,
     alignItems: "center",
+    width:width
   },
   gradient: {
     flex: 1,

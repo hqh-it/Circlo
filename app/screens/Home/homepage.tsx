@@ -1,6 +1,5 @@
 import Appfooter from "@/app/components/Appfooter";
 import Appheader from "@/app/components/Appheader";
-import { usePathname, useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import { View } from "react-native";
@@ -8,10 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ProductFeed from "../../../app/components/ProductFeed";
 import { auth, db } from "../../../firebaseConfig";
 function Homepage() {
-    const router = useRouter();
-    const pathname = usePathname();
-    
-    // fetch user data to display on homepage
+
     const [fullname, setfullname]= useState<string>("");
     useEffect(()=>{
         const fetchUserData = async() =>{

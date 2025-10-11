@@ -32,6 +32,7 @@ interface ProductCardProps {
   onLikePress?: () => void;
   isLiked?: boolean;
   mode?: 'default' | 'profile'; 
+  onProductDeleted?: () => void;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
@@ -40,6 +41,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onLikePress,
   isLiked = false,
   mode = 'default',
+  onProductDeleted,
 }) => {
   const router = useRouter();
   
@@ -75,6 +77,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
               if (result.success) {
                 console.log('✅ Product deleted successfully');
                 Alert.alert('Success', 'Product has been deleted successfully!');
+                if (onProductDeleted) {
+                  onProductDeleted();
+                }
               } else {
                 console.error('❌ Failed to delete product:', result.error);
                 Alert.alert('Error', result.error || 'Failed to delete product');
