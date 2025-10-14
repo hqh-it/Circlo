@@ -1,9 +1,8 @@
-// services/Chat/chatService.js
 import {
   addDoc,
   collection,
   doc,
-  getDoc, // THÊM DÒNG NÀY
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -230,9 +229,6 @@ export const chatService = {
     }
   },
 
-  /**
-   * ĐÁNH DẤU TIN NHẮN ĐÃ ĐỌC 
-   */
   markMessagesAsRead: async (channelId, userId) => {
     try {
       console.log('👀 Đánh dấu tin nhắn đã đọc...');
@@ -244,27 +240,33 @@ export const chatService = {
       );
       
       const snapshot = await getDocs(q);
-      const batch = [];
+      const updatePromises = [];
       
-      snapshot.forEach(doc => {
-        const messageData = doc.data();
-        const messageId = doc.id;
+      snapshot.forEach((document) => {
+        const messageData = document.data();
+        const messageId = document.id;
         
-        if (!messageData.readBy || !messageData.readBy.includes(userId)) {
+        // Chỉ đánh dấu tin nhắn của người khác và chưa đọc
+        if (messageData.senderId !== userId && 
+            (!messageData.readBy || !messageData.readBy.includes(userId))) {
+          
+          // SỬA DÒNG NÀY - đảm bảo import doc đúng cách
           const messageRef = doc(db, 'messages', messageId);
           const updatedReadBy = messageData.readBy ? 
             [...messageData.readBy, userId] : [userId];
           
-          batch.push(updateDoc(messageRef, {
-            readBy: updatedReadBy,
-            status: MessageStatus.READ
-          }));
+          updatePromises.push(
+            updateDoc(messageRef, {
+              readBy: updatedReadBy,
+              status: MessageStatus.READ
+            })
+          );
         }
       });
 
-      if (batch.length > 0) {
-        await Promise.all(batch);
-        console.log(`✅ Đã đánh dấu ${batch.length} tin nhắn đã đọc`);
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        console.log(`✅ Đã đánh dấu ${updatePromises.length} tin nhắn đã đọc`);
       } else {
         console.log('ℹ️ Không có tin nhắn nào cần đánh dấu đã đọc');
       }
@@ -277,6 +279,46 @@ export const chatService = {
         success: false,
         error: error.message
       };
+    }
+  },
+
+  getUnreadMessagesCount: async (userId) => {
+    try {
+      console.log('🔍 Đếm tin nhắn chưa đọc cho user:', userId);
+      
+      const channelsResult = await chatService.getUserChannels(userId);
+      let totalUnread = 0;
+
+      for (const channel of channelsResult.channels) {
+        const messagesRef = collection(db, 'messages');
+        const q = query(
+          messagesRef,
+          where('channelId', '==', channel.id),
+          orderBy('timestamp', 'desc')
+        );
+        
+        const snapshot = await getDocs(q);
+        
+        let channelUnread = 0;
+        snapshot.forEach(doc => {
+          const messageData = doc.data();
+          
+          if (messageData.senderId !== userId && 
+              (!messageData.readBy || !messageData.readBy.includes(userId))) {
+            channelUnread++;
+          }
+        });
+        
+        totalUnread += channelUnread;
+        console.log(`📊 Channel ${channel.id}: ${channelUnread} tin nhắn chưa đọc`);
+      }
+      
+      console.log(`✅ Tổng tin nhắn chưa đọc: ${totalUnread}`);
+      return totalUnread;
+      
+    } catch (error) {
+      console.error('❌ Lỗi đếm tin nhắn chưa đọc:', error);
+      return 0;
     }
   },
 

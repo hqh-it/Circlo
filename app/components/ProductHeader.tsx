@@ -1,15 +1,12 @@
-// components/ProductHeader.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Image,
+  LayoutAnimation,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ProductInfo {
   id: string;
@@ -22,58 +19,103 @@ interface ProductInfo {
 interface ProductHeaderProps {
   product: ProductInfo;
   onPress?: () => void;
+  showHideButton?: boolean; 
 }
 
-const ProductHeader: React.FC<ProductHeaderProps> = ({ product, onPress }) => {
+const ProductHeader: React.FC<ProductHeaderProps> = ({ 
+  product, 
+  onPress, 
+  showHideButton = false 
+}) => {
+  const [isVisible, setIsVisible] = useState(true);
+
   const firstImage = product.images && product.images.length > 0 ? product.images[0] : null;
 
+  const toggleVisibility = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsVisible(!isVisible);
+  };
+
+  const handleContainerPress = () => {
+    if (onPress && isVisible) {
+      onPress();
+    }
+  };
+
+  if (!isVisible) {
+    return (
+      <TouchableOpacity 
+        style={styles.hiddenContainer}
+        onPress={toggleVisibility}
+        activeOpacity={0.7}
+      >
+        <View style={styles.hiddenContent}>
+          <Text style={styles.hiddenIcon}>📦</Text>
+          <Text style={styles.hiddenText}>Show Product</Text>
+          <Text style={styles.showButton}>▼</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
   return (
-    <TouchableOpacity 
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      {/* Product Image */}
-      <View style={styles.imageContainer}>
-        {firstImage ? (
-          <Image 
-            source={{ uri: firstImage }} 
-            style={styles.productImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.noImage}>
-            <Text style={styles.noImageText}>📷</Text>
-          </View>
-        )}
-      </View>
+    <View style={styles.container}>
+      <TouchableOpacity 
+        style={styles.contentContainer}
+        onPress={handleContainerPress}
+        activeOpacity={0.7}
+      >
+        {/* Product Image */}
+        <View style={styles.imageContainer}>
+          {firstImage ? (
+            <Image 
+              source={{ uri: firstImage }} 
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.noImage}>
+              <Text style={styles.noImageText}>📷</Text>
+            </View>
+          )}
+        </View>
 
-      {/* Product Info */}
-      <View style={styles.infoContainer}>
-        <Text style={styles.productTitle} numberOfLines={2}>
-          {product.title || 'No Title'}
-        </Text>
-        <Text style={styles.productPrice}>
-          {product.price?.toLocaleString() || '0'} VND
-        </Text>
-        <Text style={styles.productStatus}>
-          💬 Chatting about this product
-        </Text>
-      </View>
+        {/* Product Info */}
+        <View style={styles.infoContainer}>
+          <Text style={styles.productTitle} numberOfLines={2}>
+            {product.title || 'No Title'}
+          </Text>
+          <Text style={styles.productPrice}>
+            {product.price?.toLocaleString() || '0'} VND
+          </Text>
+          <Text style={styles.productStatus}>
+            💬 Chatting about this product
+          </Text>
+        </View>
 
-      {/* Arrow Indicator */}
-      <View style={styles.arrowContainer}>
-        <Text style={styles.arrow}>›</Text>
-      </View>
-    </TouchableOpacity>
+        {/* Arrow Indicator */}
+        <View style={styles.arrowContainer}>
+          <Text style={styles.arrow}>›</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Hide Button */}
+      {showHideButton && (
+        <TouchableOpacity 
+          style={styles.hideButton}
+          onPress={toggleVisibility}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.hideButtonText}>▲ Hide</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    padding: 12,
     marginHorizontal: 16,
     marginVertical: 8,
     borderRadius: 12,
@@ -84,6 +126,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
+  },
+  contentContainer: {
+    flexDirection: 'row',
+    padding: 12,
   },
   imageContainer: {
     marginRight: 12,
@@ -125,8 +172,7 @@ const styles = StyleSheet.create({
   },
   productStatus: {
     fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
+    color: '#e8c444ff',
   },
   arrowContainer: {
     justifyContent: 'center',
@@ -136,6 +182,48 @@ const styles = StyleSheet.create({
   arrow: {
     fontSize: 20,
     color: '#999',
+    fontWeight: 'bold',
+  },
+  hideButton: {
+    backgroundColor: '#F8F8F8',
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#E8E8E8',
+  },
+  hideButtonText: {
+    fontSize: 12,
+    color: '#009a03ff',
+    fontWeight: '500',
+  },
+  hiddenContainer: {
+    backgroundColor: '#F8F8F8',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    alignItems: 'center',
+    height: 50, 
+  },
+  hiddenContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hiddenIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  hiddenText: {
+    fontSize: 14,
+    color: '#009a03ff',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  showButton: {
+    fontSize: 14,
+    color: '#009a03ff',
     fontWeight: 'bold',
   },
 });

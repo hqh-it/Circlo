@@ -20,7 +20,7 @@ export default function Profile(){
     return(
 
         
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top']}>
             <Header title="User's Profile"/>
             <View style={[styles.menubar,  {backgroundColor: tabColors[selectedTab] }]}>
                 <TouchableOpacity onPress={() => setSelectedTab("Information")}>

@@ -8,13 +8,12 @@ export default function Appheader(){
     const router = useRouter();
     return (
         <View style={styles.container}>
-            
-
             <TouchableOpacity >
                 <Image style={styles.icon} source={require('../assets/icons/menu.png')}></Image>
             </TouchableOpacity>
             
             <Image style={styles.logo} source={require('../assets/images/logo.png')}></Image>
+            
             <TouchableOpacity onPress={()=>router.push("/screens/Profile/profile")}>
               <Image style={styles.profile} source={require('../assets/icons/user.png')}></Image>
             </TouchableOpacity>
@@ -43,6 +42,7 @@ const styles = StyleSheet.create({
   profile:{
     height: width*0.1,
     width:width*0.1, 
+    margin:height*0.01
   },
   icon:{
     height:height*0.05,

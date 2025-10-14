@@ -1,4 +1,4 @@
-import { useFocusEffect } from '@react-navigation/native'; // 🔥 THÊM IMPORT
+import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,9 +16,12 @@ import ProductCard from './ProductCard';
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface ProductFeedProps {
-  mode?: 'global' | 'user'; 
-  userId?: string; 
-  onProductDeleted?: () => void; 
+  mode?: 'global' | 'user';
+  userId?: string;
+  onProductDeleted?: () => void;
+  searchResults?: any[];
+  isSearching?: boolean;
+  hasSearched?: boolean;
 }
 
 interface Product {
@@ -39,7 +42,14 @@ interface Product {
   likedBy?: string[];
 }
 
-const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedProps) => {
+const ProductFeed = ({ 
+  mode = 'global', 
+  userId, 
+  onProductDeleted, 
+  searchResults = [],
+  isSearching = false,
+  hasSearched = false
+}: ProductFeedProps) => {
   const { user } = useAuth();
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,7 +72,7 @@ const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedP
         setProducts(result.products);
       } else {
         console.error('❌ ProductFeed: Failed to load products:', result.error);
-        setProducts([]); 
+        setProducts([]);
       }
       
     } catch (error) {
@@ -74,22 +84,20 @@ const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedP
     }
   };
 
-    const handleProductDeleted = () => {
+  const handleProductDeleted = () => {
     console.log('🔄 ProductFeed: Product deleted, reloading...');
-    loadProducts(); 
+    loadProducts();
     if (onProductDeleted) {
-      onProductDeleted(); 
+      onProductDeleted();
     }
   };
-
 
   useFocusEffect(
     useCallback(() => {
       console.log('🎯 ProductFeed: Screen focused, reloading products...');
       loadProducts();
-    }, [mode, userId]) 
+    }, [mode, userId])
   );
-
 
   useEffect(() => {
     loadProducts();
@@ -100,7 +108,19 @@ const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedP
     loadProducts();
   };
 
-  if (loading) {
+  // Determine which products to display
+  const productsToDisplay = hasSearched ? searchResults : products;
+
+  if (isSearching) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#00A86B" />
+        <Text style={styles.loadingText}>Searching products...</Text>
+      </View>
+    );
+  }
+
+  if (loading && !hasSearched) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#00A86B" />
@@ -109,7 +129,16 @@ const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedP
     );
   }
 
-  if (products.length === 0) {
+  if (hasSearched && searchResults.length === 0) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.emptyText}>No products found</Text>
+        <Text style={styles.emptySubText}>Try different search terms</Text>
+      </View>
+    );
+  }
+
+  if (productsToDisplay.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.emptyText}>
@@ -124,15 +153,23 @@ const ProductFeed = ({ mode = 'global', userId, onProductDeleted }: ProductFeedP
 
   return (
     <View style={styles.container}>
+      {hasSearched && (
+        <View style={styles.searchInfo}>
+          <Text style={styles.searchInfoText}>
+            Found {searchResults.length} product{searchResults.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      )}
+      
       <FlatList
-        data={products}
+        data={productsToDisplay}
         renderItem={({ item }) => (
           <View style={{ width: SCREEN_WIDTH }}>
             <ProductCard
               product={item}
               isLiked={item.likedBy?.includes(user?.uid || '')}
               mode={mode === 'user' ? 'profile' : 'default'}
-              onProductDeleted={handleProductDeleted} 
+              onProductDeleted={handleProductDeleted}
             />
           </View>
         )}
@@ -156,11 +193,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-    paddingBottom: 40
+    paddingBottom: 10
   },
   listContent: {
     paddingVertical: 8,
-    paddingHorizontal: 0, 
+    paddingHorizontal: 0,
   },
   centerContainer: {
     flex: 1,
@@ -183,6 +220,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  searchInfo: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  searchInfoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
 });
 

@@ -8,7 +8,8 @@ export default function Index() {
           flexDirection:"column",
           alignItems:"center",
           backgroundColor:"#ffffffff"
-        }}>   
+        }}
+        edges={['top','bottom']}>   
         <Login/>
     </SafeAreaView>
   );

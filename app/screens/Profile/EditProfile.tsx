@@ -236,7 +236,7 @@ export default function EditProfile() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <Header title="Edit Profile" />
       
       {/* Avatar Section */}

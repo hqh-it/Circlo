@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { chatService } from '../../../services/Chat/chatService';
-import { getTimeAgo } from '../../../services/Product/productService';
+import { getProductById, getTimeAgo } from '../../../services/Product/productService';
 import { loadUserData } from '../../../services/User/userService';
 import Header from "../../components/header_for_detail";
 
@@ -44,11 +44,7 @@ interface OtherUser {
 
 interface ChannelWithOtherUser extends Channel {
   otherUser: OtherUser;
-  productInfo?: {
-    title?: string;
-    price?: number;
-    image?: string;
-  };
+  productImage?: string;
 }
 
 const ChatListScreen = () => {
@@ -58,6 +54,23 @@ const ChatListScreen = () => {
   const [channels, setChannels] = useState<ChannelWithOtherUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Load product image for channels
+  const loadProductImage = async (productId: string): Promise<string | undefined> => {
+    try {
+      const result = await getProductById(productId);
+      
+      // Kiểm tra an toàn với type any
+      const product = result.product as any;
+      if (result.success && product && Array.isArray(product.images) && product.images.length > 0) {
+        return product.images[0]; // Chỉ lấy hình ảnh đầu tiên
+      }
+      return undefined;
+    } catch (error) {
+      console.error('Error loading product image:', error);
+      return undefined;
+    }
+  };
 
   // Load user channels
   const loadChannels = async () => {
@@ -70,7 +83,7 @@ const ChatListScreen = () => {
       if (result.success && result.channels) {
         console.log(`✅ Found ${result.channels.length} channels`);
         
-        // Process channels to add otherUser info
+        // Process channels to add otherUser info and product image
         const processedChannels: ChannelWithOtherUser[] = [];
         
         for (const channel of result.channels) {
@@ -87,20 +100,21 @@ const ChatListScreen = () => {
               let otherUserAvatar: string | undefined = undefined;
 
               if (userData) {
-                // Ưu tiên: fullName -> displayName -> email -> fallback
                 otherUserName = userData.fullName || 
                                userData.displayName || 
                                userData.email?.split('@')[0] || 
                                'Unknown User';
                 otherUserAvatar = userData.avatarURL;
-                
-                console.log('✅ User data loaded:', otherUserName);
               } else {
-                // Fallback: use participantDetails
                 const fallbackData = channel.participantDetails?.[otherUserId];
                 otherUserName = fallbackData?.name || 'Unknown User';
                 otherUserAvatar = fallbackData?.avatar;
-                console.log('⚠️ Using fallback data:', otherUserName);
+              }
+              
+              // Load product image if productId exists
+              let productImage: string | undefined;
+              if (channel.productId) {
+                productImage = await loadProductImage(channel.productId);
               }
               
               const channelWithOtherUser: ChannelWithOtherUser = {
@@ -109,7 +123,8 @@ const ChatListScreen = () => {
                   uid: otherUserId,
                   name: otherUserName,
                   avatar: otherUserAvatar
-                }
+                },
+                productImage: productImage
               };
               
               processedChannels.push(channelWithOtherUser);
@@ -165,54 +180,58 @@ const ChatListScreen = () => {
         style={styles.channelItem}
         onPress={() => handleChannelPress(item)}
       >
-        {/* User Avatar with Online Indicator */}
-        <View style={styles.avatarContainer}>
-          <Image 
-            source={
-              item.otherUser.avatar 
-                ? { uri: item.otherUser.avatar }
-                : require('../../assets/icons/profile-picture.png')
-            } 
-            style={styles.avatar} 
-          />
-          {/* Online Indicator - You can implement real online status later */}
-          <View style={styles.onlineIndicator} />
-        </View>
+        {/* Product Image - Hiển thị như ProductCard */}
+        {item.productImage && (
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: item.productImage }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          </View>
+        )}
         
-        {/* Channel Info */}
-        <View style={styles.channelInfo}>
-          <View style={styles.channelHeader}>
-            <View style={styles.nameContainer}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {item.otherUser.name}
+        {/* Chat Content */}
+        <View style={styles.chatContent}>
+          {/* User Avatar */}
+          <View style={styles.avatarContainer}>
+            <Image 
+              source={
+                item.otherUser.avatar 
+                  ? { uri: item.otherUser.avatar }
+                  : require('../../assets/icons/profile-picture.png')
+              } 
+              style={styles.avatar} 
+            />
+            <View style={styles.onlineIndicator} />
+          </View>
+          
+          {/* Channel Info */}
+          <View style={styles.channelInfo}>
+            <View style={styles.channelHeader}>
+              <View style={styles.nameContainer}>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {item.otherUser.name}
+                </Text>
+                {hasUnread && <View style={styles.unreadDot} />}
+              </View>
+              <Text style={styles.timeText}>
+                {lastMessageTime}
               </Text>
-              {hasUnread && <View style={styles.unreadDot} />}
             </View>
-            <Text style={styles.timeText}>
-              {lastMessageTime}
+            
+            <Text style={styles.lastMessage} numberOfLines={2}>
+              {item.lastMessage || 'Start a conversation...'}
             </Text>
           </View>
           
-          <Text style={styles.lastMessage} numberOfLines={2}>
-            {item.lastMessage || 'Start a conversation...'}
-          </Text>
-          
-          {/* Product Info if available */}
-          {item.productId && (
-            <View style={styles.productTag}>
-              <Text style={styles.productTagText}>
-                🛍️ Product Chat
-              </Text>
+          {/* Message Indicator */}
+          {hasUnread && (
+            <View style={styles.messageIndicator}>
+              <View style={styles.unreadBadge} />
             </View>
           )}
         </View>
-        
-        {/* Message Indicator */}
-        {hasUnread && (
-          <View style={styles.messageIndicator}>
-            <View style={styles.unreadBadge} />
-          </View>
-        )}
       </TouchableOpacity>
     );
   };
@@ -247,7 +266,6 @@ const ChatListScreen = () => {
       <View style={styles.header}>
         <Header title='Chat'/>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Messages</Text>
           <Text style={styles.headerSubtitle}>
             {channels.length} conversation{channels.length !== 1 ? 's' : ''}
           </Text>
@@ -283,8 +301,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -293,8 +309,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerContent: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems:"center"
   },
   headerDecoration: {
     height: 4,
@@ -332,18 +349,28 @@ const styles = StyleSheet.create({
   },
   // Channel Item
   channelItem: {
-    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    padding: 16,
     borderRadius: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+
+  imageContainer: {
+    position: 'relative',
+  },
+  productImage: {
+    width: '100%',
+    height: 80, 
+    backgroundColor: '#f8f8f8',
+  },
+  chatContent: {
+    flexDirection: 'row',
+    padding: 16,
   },
   avatarContainer: {
     position: 'relative',

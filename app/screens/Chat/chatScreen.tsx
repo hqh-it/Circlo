@@ -6,7 +6,8 @@ import {
   FlatList,
   Image,
   Keyboard,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,13 +15,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { chatService } from '../../../services/Chat/chatService';
 import { ChatMessage } from '../../../services/Chat/chatTypes';
 import { getProductById, getTimeAgo } from '../../../services/Product/productService';
 import { loadUserData } from '../../../services/User/userService';
 import ProductHeader from '../../components/ProductHeader';
-
 interface User {
   uid: string;
   fullName: string;
@@ -35,6 +36,19 @@ interface ProductInfo {
   images: string[];
   sellerId: string;
 }
+
+const COLORS = {
+  primary: '#2F4F4F',
+  primaryLight: '#3A5F5F',
+  accent: '#FFD700',
+  accentLight: '#FFF8DC',
+  background: '#F8F9FA',
+  white: '#FFFFFF',
+  gray: '#6B7280',
+  lightGray: '#E5E7EB',
+  text: '#1F2937',
+  error: '#EF4444',
+};
 
 const ChatScreen = () => {
   const { user: currentUser } = useAuth();
@@ -51,16 +65,60 @@ const ChatScreen = () => {
   const [productData, setProductData] = useState<ProductInfo | null>(null);
   const [loadingOtherUser, setLoadingOtherUser] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
-  const isMountedRef = useRef(true);
-  
+  const textInputRef = useRef<TextInput>(null);
+
+  // Keyboard listeners
+  useEffect(() => {
+    const keyboardDidShow = () => {
+      setIsKeyboardVisible(true);
+      setTimeout(() => {
+        if (flatListRef.current && messages.length > 0) {
+          flatListRef.current.scrollToEnd({ animated: true });
+        }
+      }, 100);
+    };
+
+    const keyboardDidHide = () => {
+      setIsKeyboardVisible(false);
+    };
+
+    const showSubscription = Keyboard.addListener('keyboardDidShow', keyboardDidShow);
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', keyboardDidHide);
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [messages.length]);
+
+  const markMessagesAsRead = async () => {
+    if (!channelId || !currentUser) return;
+    
+    try {
+      await chatService.markMessagesAsRead(channelId, currentUser.uid);
+    } catch (error) {
+      console.error('Lỗi khi đánh dấu tin nhắn đã đọc:', error);
+    }
+  };
+
   const handleBackPress = () => {
+    markMessagesAsRead();
     Keyboard.dismiss();
     setTimeout(() => {
       router.back();
     }, 100);
+  };
+
+  const handleFocus = () => {
+    setTimeout(() => {
+      if (flatListRef.current && messages.length > 0) {
+        flatListRef.current.scrollToEnd({ animated: true });
+      }
+    }, 300);
   };
 
   useEffect(() => {
@@ -102,13 +160,25 @@ const ChatScreen = () => {
     loadProductData();
   }, [channelId, params.productData]);
 
-  // Component cleanup
+  useEffect(() => {
+    if (channelId && currentUser && !loadingOtherUser) {
+      markMessagesAsRead();
+    }
+  }, [channelId, currentUser, loadingOtherUser]);
+
+  useEffect(() => {
+    if (messages.length > 0 && channelId && currentUser && !loadingOtherUser) {
+      markMessagesAsRead();
+    }
+  }, [messages, channelId, currentUser, loadingOtherUser]);
+
   useEffect(() => {
     return () => {
-      isMountedRef.current = false;
+      if (channelId && currentUser) {
+        markMessagesAsRead();
+      }
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
-        unsubscribeRef.current = null;
       }
     };
   }, []);
@@ -156,7 +226,6 @@ const ChatScreen = () => {
     }
   };
 
-  // Load current user data
   useEffect(() => {
     const loadCurrentUser = async () => {
       if (!currentUser) return;
@@ -179,14 +248,12 @@ const ChatScreen = () => {
     loadCurrentUser();
   }, [currentUser]);
 
-  // Load other user info
   useEffect(() => {
     if (channelId && currentUser) {
       loadOtherUserInfo();
     }
   }, [channelId, currentUser]);
 
-  // Messages listener - FIXED VERSION
   useEffect(() => {
     if (!channelId || !currentUser || loadingOtherUser) return;
 
@@ -195,7 +262,6 @@ const ChatScreen = () => {
     const setupMessageListener = async () => {
       setMessagesLoading(true);
 
-      // Cleanup previous listener
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
         unsubscribeRef.current = null;
@@ -207,6 +273,10 @@ const ChatScreen = () => {
         if (result.success && result.messages) {
           setMessages(result.messages);
           setMessagesLoading(false);
+          
+          if (result.messages.length > 0 && channelId && currentUser) {
+            markMessagesAsRead();
+          }
           
           setTimeout(() => {
             if (flatListRef.current && result.messages.length > 0 && isActive) {
@@ -227,7 +297,6 @@ const ChatScreen = () => {
       isActive = false;
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
-        unsubscribeRef.current = null;
       }
     };
   }, [channelId, currentUser, loadingOtherUser]);
@@ -246,25 +315,27 @@ const ChatScreen = () => {
       if (result.success) {
         setNewMessage('');
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
+          if (flatListRef.current) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
         }, 100);
       } else {
-        Alert.alert('Error', 'Failed to send message');
+        Alert.alert('Lỗi', 'Không thể gửi tin nhắn');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to send message');
+      Alert.alert('Lỗi', 'Không thể gửi tin nhắn');
     } finally {
       setSending(false);
     }
   };
 
   const formatMessageTime = (timestamp: any) => {
-    if (!timestamp) return 'Just now';
+    if (!timestamp) return 'Vừa xong';
     
     try {
       return getTimeAgo(timestamp);
     } catch (error) {
-      return 'Just now';
+      return 'Vừa xong';
     }
   };
 
@@ -355,8 +426,8 @@ const ChatScreen = () => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0080FF" />
-          <Text style={styles.loadingText}>Loading chat...</Text>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Đang tải tin nhắn...</Text>
         </View>
       </SafeAreaView>
     );
@@ -366,9 +437,9 @@ const ChatScreen = () => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>Unable to load chat</Text>
+          <Text style={styles.errorText}>Không thể tải tin nhắn</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
-            <Text style={styles.retryButtonText}>Go Back</Text>
+            <Text style={styles.retryButtonText}>Quay lại</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -377,8 +448,12 @@ const ChatScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#0080FF" />
-      <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
             <Text style={styles.backButtonText}>‹</Text>
@@ -411,6 +486,7 @@ const ChatScreen = () => {
           <ProductHeader 
             product={productData}
             onPress={handleProductPress}
+            showHideButton={true}
           />
         )}
         
@@ -420,8 +496,8 @@ const ChatScreen = () => {
         ]}>
           {messagesLoading ? (
             <View style={styles.messagesLoadingContainer}>
-              <ActivityIndicator size="small" color="#0080FF" />
-              <Text style={styles.messagesLoadingText}>Loading messages...</Text>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.messagesLoadingText}>Đang tải tin nhắn...</Text>
             </View>
           ) : (
             <FlatList
@@ -439,26 +515,38 @@ const ChatScreen = () => {
                   }, 100);
                 }
               }}
+              onLayout={() => {
+                if (messages.length > 0) {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }, 100);
+                }
+              }}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No messages yet</Text>
-                  <Text style={styles.emptySubText}>Start a conversation!</Text>
+                  <Text style={styles.emptyText}>Chưa có tin nhắn nào</Text>
+                  <Text style={styles.emptySubText}>Hãy bắt đầu cuộc trò chuyện!</Text>
                 </View>
               }
             />
           )}
 
-          <View style={styles.inputContainer}>
+          <View style={[
+            styles.inputContainer,
+            isKeyboardVisible && styles.inputContainerWithKeyboard
+          ]}>
             <View style={styles.inputWrapper}>
               <TextInput
+                ref={textInputRef}
                 style={styles.textInput}
                 value={newMessage}
                 onChangeText={setNewMessage}
-                placeholder="Type a message..."
-                placeholderTextColor="#999"
+                placeholder="Nhập tin nhắn..."
+                placeholderTextColor={COLORS.gray}
                 multiline
                 maxLength={500}
                 editable={!messagesLoading}
+                onFocus={handleFocus}
               />
               
               <TouchableOpacity 
@@ -470,7 +558,7 @@ const ChatScreen = () => {
                 disabled={!newMessage.trim() || sending || messagesLoading}
               >
                 {sending ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
                   <Text style={styles.sendButtonText}>➤</Text>
                 )}
@@ -478,49 +566,46 @@ const ChatScreen = () => {
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  chatContainerWithProduct: {
-    flex: 1,
-  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#0080FF',
+    backgroundColor: COLORS.primary,
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
     padding: 20,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: COLORS.gray,
   },
   errorText: {
     fontSize: 16,
-    color: '#666',
+    color: COLORS.gray,
     marginBottom: 16,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#0080FF',
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
   },
   retryButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -529,9 +614,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#0080FF',
+    backgroundColor: COLORS.primary,
     borderBottomWidth: 1,
-    borderBottomColor: '#0066CC',
+    borderBottomColor: COLORS.primaryLight,
   },
   backButton: {
     padding: 8,
@@ -539,7 +624,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 28,
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '300',
   },
   headerAvatar: {
@@ -548,7 +633,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 12,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: COLORS.accent,
   },
   headerInfo: {
     flex: 1,
@@ -556,11 +641,11 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: COLORS.white,
   },
   headerStatus: {
     fontSize: 14,
-    color: '#E8F4FF',
+    color: COLORS.accentLight,
     marginTop: 2,
   },
   menuButton: {
@@ -568,19 +653,23 @@ const styles = StyleSheet.create({
   },
   menuButtonText: {
     fontSize: 24,
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: 'bold',
   },
   chatContainer: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: COLORS.background,
+  },
+  chatContainerWithProduct: {
+    flex: 1,
   },
   messagesList: {
     flex: 1,
   },
   messagesContent: {
     paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   messagesLoadingContainer: {
     flex: 1,
@@ -590,7 +679,7 @@ const styles = StyleSheet.create({
   messagesLoadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#666',
+    color: COLORS.gray,
   },
   messageContainer: {
     marginVertical: 4,
@@ -627,7 +716,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: COLORS.lightGray,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
   },
   avatarSpacer: {
     width: 36,
@@ -635,13 +726,13 @@ const styles = StyleSheet.create({
   },
   senderName: {
     fontSize: 13,
-    color: '#666',
+    color: COLORS.gray,
     marginBottom: 4,
     marginLeft: 4,
     fontWeight: '500',
   },
   otherBubble: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
@@ -652,62 +743,67 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: COLORS.lightGray,
   },
   myBubble: {
-    backgroundColor: '#0080FF',
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
     borderBottomRightRadius: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 3,
   },
   myMessageText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: COLORS.white,
     lineHeight: 20,
   },
   otherMessageText: {
     fontSize: 16,
-    color: '#333333',
+    color: COLORS.text,
     lineHeight: 20,
   },
   myMessageTime: {
     fontSize: 12,
-    color: '#888',
+    color: COLORS.gray,
     marginTop: 4,
     textAlign: 'right',
   },
   otherMessageTime: {
     fontSize: 12,
-    color: '#888',
+    color: COLORS.gray,
     marginTop: 4,
     textAlign: 'left',
   },
   inputContainer: {
-    padding: 16,
-    backgroundColor: '#fff',
+    paddingTop: 10,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.white,
     borderTopWidth: 1,
-    borderTopColor: '#E8E8E8',
+    borderTopColor: COLORS.lightGray,
+  },
+  inputContainerWithKeyboard: {
+    paddingBottom: 40,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: COLORS.white,
     borderRadius: 25,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderWidth: 2,
+    borderColor: COLORS.accentLight,
   },
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: COLORS.text,
     maxHeight: 100,
     marginRight: 8,
     paddingVertical: 8,
@@ -716,16 +812,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#0080FF',
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
   sendButtonDisabled: {
-    backgroundColor: '#CCCCCC',
+    backgroundColor: COLORS.lightGray,
   },
   sendButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: 'bold',
     fontSize: 18,
     marginLeft: 2,
@@ -738,13 +834,13 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: '#666',
+    color: COLORS.gray,
     fontWeight: '600',
     marginBottom: 8,
   },
   emptySubText: {
     fontSize: 14,
-    color: '#999',
+    color: COLORS.gray,
     textAlign: 'center',
   },
 });
