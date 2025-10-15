@@ -389,12 +389,88 @@ export const getTimeAgo = (createdAt) => {
   }
 };
 
-// FORMAT CONDITION TEXT - Cũng có thể chuyển vào service
-export const getConditionText = (condition) => {
-  const conditionMap = {
-    'like_new': '🆕 Like New (99%)',
-    'used_good': '👍 Good Condition (70%-80%)', 
-    'used_fair': '👌 Fair Condition (50%)'
+
+  export const getConditionText = (condition) => {
+    const conditionMap = {
+      'like_new': '🆕 Like New (99%)',
+      'used_good': '👍 Good Condition (70%-80%)', 
+      'used_fair': '👌 Fair Condition (50%)'
+    };
+    return conditionMap[condition] || '';
   };
-  return conditionMap[condition] || '';
+
+    export const getProductsByFilter = async (filters = {}) => {
+  try {
+    console.log('Getting products with filters:', filters);
+    
+    let productsQuery = collection(db, 'products');
+    const queryConstraints = [];
+    
+    queryConstraints.push(where('status', '==', 'active'));
+    
+    if (filters.categories && filters.categories.length > 0) {
+      queryConstraints.push(where('category', 'in', filters.categories));
+    }
+    
+    if (filters.conditions && filters.conditions.length > 0) {
+      queryConstraints.push(where('condition', 'in', filters.conditions));
+    }
+    
+    if (filters.minPrice !== undefined && filters.minPrice !== null) {
+      queryConstraints.push(where('price', '>=', parseFloat(filters.minPrice)));
+    }
+    if (filters.maxPrice !== undefined && filters.maxPrice !== null) {
+      queryConstraints.push(where('price', '<=', parseFloat(filters.maxPrice)));
+    }
+    
+    if (filters.location) {
+      queryConstraints.push(where('address.provinceCode', '==', filters.location));
+    }
+    
+    if (filters.sort) {
+      switch (filters.sort) {
+        case 'price_low_high':
+          queryConstraints.push(orderBy('price', 'asc'));
+          break;
+        case 'price_high_low':
+          queryConstraints.push(orderBy('price', 'desc'));
+          break;
+        default:
+          queryConstraints.push(orderBy('createdAt', 'desc'));
+      }
+    } else {
+      queryConstraints.push(orderBy('createdAt', 'desc'));
+    }
+    
+    console.log('Query constraints:', queryConstraints.length);
+    
+    const q = query(productsQuery, ...queryConstraints);
+    const querySnapshot = await getDocs(q);
+    
+    const products = [];
+    querySnapshot.forEach((doc) => {
+      const productData = doc.data();
+      products.push({
+        id: doc.id,
+        ...productData
+      });
+    });
+    
+    console.log(`Found ${products.length} products with filters`);
+    
+    return {
+      success: true,
+      products,
+      total: products.length
+    };
+    
+  } catch (error) {
+    console.error('Error getting products with filters:', error);
+    return {
+      success: false,
+      error: error.message,
+      products: [],
+      total: 0
+    };
+  }
 };

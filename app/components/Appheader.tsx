@@ -1,32 +1,61 @@
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import { Dimensions, Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import FilterDrawer from './FilterDrawer';
 
 const {height, width}= Dimensions.get("window");
 
-export default function Appheader(){
+interface AppheaderProps {
+    onApplyFilters?: (filterResult: any) => void;
+}
+
+export default function Appheader({ onApplyFilters }: AppheaderProps){
     const router = useRouter();
+    const [isFilterVisible, setIsFilterVisible] = useState(false);
+
+    const handleMenuPress = () => {
+        setIsFilterVisible(true);
+    };
+
+    const handleCloseFilter = () => {
+        setIsFilterVisible(false);
+    };
+
+    const handleApplyFilters = (filterResult: any) => {
+        if (onApplyFilters) {
+            onApplyFilters(filterResult);
+        }
+    };
+
     return (
-        <View style={styles.container}>
-            <TouchableOpacity >
-                <Image style={styles.icon} source={require('../assets/icons/menu.png')}></Image>
-            </TouchableOpacity>
-            
-            <Image style={styles.logo} source={require('../assets/images/logo.png')}></Image>
-            
-            <TouchableOpacity onPress={()=>router.push("/screens/Profile/profile")}>
-              <Image style={styles.profile} source={require('../assets/icons/user.png')}></Image>
-            </TouchableOpacity>
-        </View>
+        <>
+            <View style={styles.container}>
+                <TouchableOpacity onPress={handleMenuPress}>
+                    <Image style={styles.icon} source={require('../assets/icons/menu.png')} />
+                </TouchableOpacity>
+                
+                <Image style={styles.logo} source={require('../assets/images/logo.png')} />
+                
+                <TouchableOpacity onPress={() => router.push("/screens/Profile/profile")}>
+                    <Image style={styles.profile} source={require('../assets/icons/user.png')} />
+                </TouchableOpacity>
+            </View>
+
+            <FilterDrawer 
+                visible={isFilterVisible}
+                onClose={handleCloseFilter}
+                onApplyFilters={handleApplyFilters}
+            />
+        </>
     );
 }
 
 const styles = StyleSheet.create({
   container: {
-    top:0,
+    top: 0,
     left: 0,
     right: 0,
-    height: height* 0.07,
+    height: height * 0.07,
     width: width,
     backgroundColor: "#01332fff",
     flexDirection: "row",
@@ -35,23 +64,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#ccc",
   },
-  logo:{
-    height: height* 0.07,
-    width:width*0.17, 
+  logo: {
+    height: height * 0.07,
+    width: width * 0.17, 
   },
-  profile:{
-    height: width*0.1,
-    width:width*0.1, 
-    margin:height*0.01
+  profile: {
+    height: width * 0.1,
+    width: width * 0.1, 
+    margin: height * 0.01
   },
-  icon:{
-    height:height*0.05,
-    width:width*0.1, 
-    margin:height*0.01
+  icon: {
+    height: height * 0.05,
+    width: width * 0.1, 
+    margin: height * 0.01
   },
   title: {
     fontSize: 18,
     fontWeight: "bold",
   },
-
 });

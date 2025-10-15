@@ -2,7 +2,7 @@ import Appfooter from "@/app/components/Appfooter";
 import Appheader from "@/app/components/Appheader";
 import { doc, getDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
-import { Dimensions, StyleSheet, View } from "react-native";
+import { Dimensions, StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ProductFeed from "../../../app/components/ProductFeed";
 import { auth, db } from "../../../firebaseConfig";
@@ -15,8 +15,13 @@ function Homepage() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
+    const [hasFiltered, setHasFiltered] = useState(false);
 
     useEffect(() => {
+        StatusBar.setBarStyle('light-content');
+        StatusBar.setBackgroundColor('#01332fff');
+
         const fetchUserData = async () => {
             const user = auth.currentUser;
             if (user) {
@@ -40,6 +45,7 @@ function Homepage() {
     const handleSearchResults = (results: any[]) => {
         setSearchResults(results);
         setHasSearched(true);
+        setHasFiltered(false);
     };
 
     const handleSearchStart = () => {
@@ -50,11 +56,19 @@ function Homepage() {
         setIsSearching(false);
     };
 
-    // Thêm hàm mới để clear search
     const handleClearSearch = () => {
         setSearchResults([]);
         setHasSearched(false);
         setIsSearching(false);
+        setFilteredProducts([]);
+        setHasFiltered(false);
+    };
+
+    const handleApplyFilters = (filterResult: any) => {
+        console.log('Received filter results:', filterResult);
+        setFilteredProducts(filterResult.products);
+        setHasFiltered(true);
+        setHasSearched(false);
     };
 
     const handleFocus = () => {
@@ -68,34 +82,30 @@ function Homepage() {
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
-                {/* Header */}
                 <View style={styles.header}>
-                    <Appheader />
+                    <Appheader onApplyFilters={handleApplyFilters} />
                 </View>
                 
-                {/* Search Bar */}
                 <View style={styles.searchContainer}>
                     <SearchBar 
                         placeholder="Search products..."
                         onSearchResults={handleSearchResults}
                         onSearchStart={handleSearchStart}
                         onSearchEnd={handleSearchEnd}
-                        onClearSearch={handleClearSearch} // Thêm prop mới
+                        onClearSearch={handleClearSearch}
                         onFocus={handleFocus}
                         onBlur={handleBlur}
                     />
                 </View>
                 
-                {/* Product Feed */}
                 <View style={styles.content}>
                     <ProductFeed 
-                        searchResults={searchResults}
+                        searchResults={hasSearched ? searchResults : (hasFiltered ? filteredProducts : [])}
                         isSearching={isSearching}
-                        hasSearched={hasSearched}
+                        hasSearched={hasSearched || hasFiltered}
                     />
                 </View>
                 
-                {/* Footer */}
                 <View style={styles.footer}>
                     <Appfooter />
                 </View>
