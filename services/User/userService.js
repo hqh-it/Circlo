@@ -1,4 +1,3 @@
-// services/User/userService.js
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../../firebaseConfig";
@@ -103,3 +102,21 @@ export async function saveUserProfile(user, userData, addressData) {
       throw new Error("Cannot load user information");
     }
   }
+
+
+  export const initializeUserFollowData = async (user) => {
+    if (!user) return;
+    
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        followers: [],
+        following: [],
+        followerCount: 0,
+        followingCount: 0,
+        createdAt: new Date()
+      });
+    } catch (error) {
+      console.error("Error initializing user follow data:", error);
+    }
+  };

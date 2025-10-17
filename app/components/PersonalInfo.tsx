@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Dimensions, Image, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuth } from "../../services/Auth/AuthContext";
+import { getFollowCounts } from "../../services/User/followService";
 import { loadUserProfile } from "../../services/User/userService";
 
 const {width} = Dimensions.get("window");
@@ -26,6 +27,10 @@ export default function PersonalInfo() {
   const { user, logout } = useAuth();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [followCounts, setFollowCounts] = useState({
+    followerCount: 0,
+    followingCount: 0
+  });
 
   // Function to load user data
   const loadData = async () => {
@@ -35,6 +40,16 @@ export default function PersonalInfo() {
       setLoading(true);
       const data = await loadUserProfile(user);
       setUserData(data);
+      
+      // Load follow counts
+      const counts = await getFollowCounts(user.uid);
+      if (counts.success) {
+        setFollowCounts({
+          followerCount: counts.followerCount,
+          followingCount: counts.followingCount
+        });
+      }
+      
       console.log('🔄 PersonalInfo: Data loaded successfully');
     } catch (error) {
       console.error("Error loading user data:", error);
@@ -90,7 +105,7 @@ export default function PersonalInfo() {
                         borderColor:"#D4A017",
                         }}/>
                 </View>
-                {/* Rate - Follow*/}
+                {/*Follow*/}
                 <View style={{
                     width:width,
                     flexDirection:"row",
@@ -100,17 +115,15 @@ export default function PersonalInfo() {
                     backgroundColor:"#f1aa05d5",
                     }}>
                     <View style={styles.ratingcolumn}>
-                      <Image style={styles.ratingicon} source={require('../assets/icons/strust2.png')} />
-                      <Text style={styles.ratingText}>Trust Score: 0</Text>
-                    </View>
-                    <View style={styles.ratingcolumn}>
                       <Image style={styles.ratingicon}source={require('../assets/icons/follower.png')} />
-                      <Text style={styles.ratingText}>Followers: 0</Text>
+                      <Text style={styles.ratingText}>Followers: {followCounts.followerCount}</Text>
                     </View>
-                    <View style={styles.ratingcolumn}>
-                      <Image style={styles.ratingicon} source={require('../assets/icons/following.png')} />
-                      <Text style={styles.ratingText}>Following: 0</Text>
-                    </View>
+                    <TouchableOpacity onPress={()=>router.push('/screens/Profile/FollowListScreen')}>
+                      <View style={styles.ratingcolumn}>
+                        <Image style={styles.ratingicon} source={require('../assets/icons/following.png')} />
+                        <Text style={styles.ratingText}>Following: {followCounts.followingCount}</Text>
+                      </View>
+                    </TouchableOpacity>
                 </View>
               </ImageBackground>
           </View>

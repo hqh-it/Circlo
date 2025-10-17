@@ -18,6 +18,7 @@ import { useAuth } from '../../../services/Auth/AuthContext';
 import { chatService } from '../../../services/Chat/chatService';
 import { getProductById, toggleProductLike } from '../../../services/Product/productService';
 import CommentSection from '../../components/CommentSection';
+import FollowButton from '../../components/FollowButton';
 import Header from '../../components/header_for_detail';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -274,47 +275,44 @@ const ProductDetailScreen = () => {
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={true}
       >
-        {/* Media Gallery Section - CHỈ HIỂN THỊ ẢNH */}
-        <View style={styles.mediaSection}>
-          <View style={styles.mediaContainer}>
-            {renderMediaContent()}
-            
-            {/* Media Counter */}
-            {imageItems.length > 0 && (
-              <View style={styles.mediaCounter}>
-                <Text style={styles.mediaCounterText}>
-                  {mediaIndex + 1} / {imageItems.length}
-                </Text>
-              </View>
-            )}
-            
-            {/* Media Thumbnails */}
-            {imageItems.length > 1 && (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={styles.thumbnailContainer}
-              >
-                {imageItems.map((image, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => setMediaIndex(index)}
-                    style={[
-                      styles.thumbnail,
-                      index === mediaIndex && styles.thumbnailActive
-                    ]}
-                  >
-                    <Image
-                      source={{ uri: image }}
-                      style={styles.thumbnailImage}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
+      <View style={styles.mediaSection}>
+        <View style={styles.mediaContainer}>
+          {renderMediaContent()}
+          
+          {/* Media Counter */}
+          {imageItems.length > 0 && (
+            <View style={styles.mediaCounter}>
+              <Text style={styles.mediaCounterText}>
+                {mediaIndex + 1} / {imageItems.length}
+              </Text>
+            </View>
+          )}
         </View>
+        {imageItems.length > 1 && (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.thumbnailContainer}
+          >
+            {imageItems.map((image, index) => (
+              <TouchableOpacity
+                key={index}
+                onPress={() => setMediaIndex(index)}
+                style={[
+                  styles.thumbnail,
+                  index === mediaIndex && styles.thumbnailActive
+                ]}
+              >
+                <Image
+                  source={{ uri: image }}
+                  style={styles.thumbnailImage}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
 
 
         {renderVideoSection()}
@@ -379,6 +377,20 @@ const ProductDetailScreen = () => {
               )}
               <View style={styles.sellerText}>
                 <Text style={styles.sellerName}>{product.sellerName || 'Unknown Seller'}</Text>
+              </View> 
+              <View style={{
+                width:1,
+                height:60, 
+                backgroundColor: '#d5d5d5ff',
+              }}></View>           
+              <View style={styles.followButtonWrapper}>
+                <FollowButton 
+                  targetUserId={product.sellerId}
+                  targetUserName={product.sellerName}
+                  onFollowChange={(isFollowing) => {
+                    console.log(`Follow status changed: ${isFollowing}`);
+                  }}
+                />
               </View>
             </View>
           </View>
@@ -400,7 +412,7 @@ const ProductDetailScreen = () => {
           <Text style={styles.sectionTitle}>📊 Product Stats</Text>
           <View style={styles.statsBox}>
             <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Listed Date:</Text>
+              <Text style={styles.statLabel}>Posted Date:</Text>
               <Text style={styles.statValue}>
                 {product.createdAt ? new Date(product.createdAt?.toDate()).toLocaleDateString() : 'Unknown date'}
               </Text>
@@ -482,7 +494,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   
-  // Media Section
   mediaSection: {
     backgroundColor: '#fff',
     marginBottom: 8,
@@ -563,7 +574,7 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: '100%',
-    height: 200, // GIẢM CHIỀU CAO
+    height: 200,
     backgroundColor: '#000',
     borderRadius: 8,
     overflow: 'hidden',
@@ -580,7 +591,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Common Styles
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -588,7 +598,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // ... (giữ nguyên tất cả các styles khác)
   mainInfoSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -656,7 +665,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#1a1a1a',
-    marginBottom: 16,
     lineHeight: 28,
   },
   tagsSection: {
@@ -680,8 +688,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#00A86B',
   },
-
-  // Description Section
   descriptionSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -742,12 +748,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sellerName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginBottom: 6,
   },
-
+  followButtonWrapper: {
+  width: SCREEN_WIDTH*0.15, 
+  alignItems: 'center',
+  },
   locationSection: {
     backgroundColor: '#fff',
     padding: 20,

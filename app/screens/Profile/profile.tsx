@@ -41,7 +41,7 @@ export default function Profile(){
                 </View>
                     <View style={[styles.contentBox,  {backgroundColor: tabColors[selectedTab] }]}>
                     {selectedTab === "Information" && <PersonalInfo/>}
-                    {selectedTab === "Product" && (<ProductFeed mode="user" userId={user?.uid}/>)}
+                    {selectedTab === "Product" && (<ProductFeed mode="user" userId={user?.uid} isOwnProfile={true}/>)}
                     {selectedTab === "History" && <Text>You haven't buy any product!</Text>}
                     </View>
         </SafeAreaView>

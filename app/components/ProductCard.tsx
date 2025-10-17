@@ -31,8 +31,9 @@ interface ProductCardProps {
   onPress?: () => void;
   onLikePress?: () => void;
   isLiked?: boolean;
-  mode?: 'default' | 'profile'; 
+  mode?: 'default' | 'profile';
   onProductDeleted?: () => void;
+  isOwnProfile?: boolean;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
@@ -42,6 +43,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   isLiked = false,
   mode = 'default',
   onProductDeleted,
+  isOwnProfile = false,
 }) => {
   const router = useRouter();
   
@@ -106,7 +108,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
           style={styles.productImage}
           resizeMode="cover"
         />
-        {/* Gradient Shadow Overlay at bottom */}
         <LinearGradient
           colors={['transparent', 'rgba(73, 71, 71, 0.1)', 'rgba(35, 34, 34, 0.54)']}
           locations={[0.4, 0.5, 1]}
@@ -116,17 +117,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
         />
       </View>
 
-      {/* Product Info */}
       <View style={styles.productInfo}>
-        
-        {/* Title with highlight background */}
         <View style={styles.titleContainer}>
           <Text style={styles.title} numberOfLines={2}>
             {product.title}
           </Text>
         </View>
         
-        {/* Seller and Time */}
         <View style={styles.sellerRow}>
           <View style={styles.sellerInfo}>
             {product.sellerAvatar && (
@@ -142,10 +139,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </Text>
         </View>
         
-        {/* Divider line */}
         <View style={styles.divider} />
         
-        {/* Price and Location */}
         <View style={styles.priceLocation}>
           <Text style={styles.price}>💰 {formatPrice(product.price)} VND</Text>
           <Text style={styles.location}>
@@ -153,20 +148,17 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </Text>
         </View>
 
-        {/* Footer - Condition and Engagement */}
         <View style={styles.footer}>
           <Text style={styles.condition}>
             {getConditionText(product.condition)}
           </Text>
           
           <View style={styles.engagement}>
-            {/* View Count */}
             <View style={styles.engagementItem}>
               <Text style={styles.engagementIcon}>👁️</Text>
               <Text style={styles.engagementText}>{product.viewCount || 0}</Text>
             </View>
             
-            {/* Like Button with Count */}
             <TouchableOpacity 
               style={[styles.likeButton, isLiked && styles.likeButtonActive]}
               onPress={onLikePress}
@@ -181,8 +173,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </View>
         </View>
 
-        {/* Action Buttons Row - Only show in profile mode */}
-        {mode === 'profile' && (
+        {mode === 'profile' && isOwnProfile && (
           <View style={styles.actionRow}>
             <TouchableOpacity 
               style={[styles.actionButton, styles.editButton]}
@@ -230,7 +221,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80, 
+    height: 80,
   },
   productInfo: {
     padding: 16,

@@ -1,28 +1,16 @@
-import { useFocusEffect } from '@react-navigation/native';
+import { collection, getDocs, limit, orderBy, query, startAfter, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
-  View
+  View,
 } from 'react-native';
-import { useAuth } from '../../services/Auth/AuthContext';
-import { getProducts, getProductsBySeller } from '../../services/Product/productService';
+import { db } from '../../firebaseConfig';
 import ProductCard from './ProductCard';
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-interface ProductFeedProps {
-  mode?: 'global' | 'user';
-  userId?: string;
-  onProductDeleted?: () => void;
-  searchResults?: any[];
-  isSearching?: boolean;
-  hasSearched?: boolean;
-}
 
 interface Product {
   id: string;
@@ -34,118 +22,175 @@ interface Product {
     province?: string;
   };
   likeCount: number;
+  viewCount?: number;
   sellerAvatar?: string;
   sellerName: string;
   condition?: string;
   createdAt?: any;
-  status?: string;
-  likedBy?: string[];
+  sellerId: string;
 }
 
-const ProductFeed = ({ 
-  mode = 'global', 
-  userId, 
-  onProductDeleted, 
-  searchResults = [],
-  isSearching = false,
-  hasSearched = false
-}: ProductFeedProps) => {
-  const { user } = useAuth();
-  
+interface ProductFeedProps {
+  mode?: 'all' | 'user' | 'following';
+  userId?: string;
+  isOwnProfile?: boolean;
+  onProductDeleted?: () => void;
+}
+
+const ProductFeed: React.FC<ProductFeedProps> = ({
+  mode = 'all',
+  userId,
+  isOwnProfile = false,
+  onProductDeleted,
+}) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async (isRefresh = false) => {
     try {
-      console.log('🔄 ProductFeed: Loading products...');
-      let result;
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      let productsQuery;
+      const productsRef = collection(db, 'products');
+
       if (mode === 'user' && userId) {
-        console.log('🔄 ProductFeed: Loading user products for:', userId);
-        result = await getProductsBySeller(userId);
+        productsQuery = query(
+          productsRef,
+          where('sellerId', '==', userId),
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        );
+      } else if (mode === 'following') {
+        // Implement following logic here
+        productsQuery = query(
+          productsRef,
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        );
       } else {
-        result = await getProducts();
+        productsQuery = query(
+          productsRef,
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        );
       }
+
+      const querySnapshot = await getDocs(productsQuery);
       
-      if (result.success) {
-        console.log('✅ ProductFeed: Products loaded successfully:', result.products.length);
-        setProducts(result.products);
+      const productsData: Product[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        productsData.push({
+          id: doc.id,
+          ...data,
+        } as Product);
+      });
+
+      if (isRefresh) {
+        setProducts(productsData);
       } else {
-        console.error('❌ ProductFeed: Failed to load products:', result.error);
-        setProducts([]);
+        setProducts(productsData);
       }
-      
+
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      setHasMore(productsData.length === 10);
     } catch (error) {
-      console.error('❌ ProductFeed: Error in loadProducts:', error);
-      setProducts([]);
+      console.error('Error loading products:', error);
+      Alert.alert('Error', 'Failed to load products');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [mode, userId]);
 
-  const handleProductDeleted = () => {
-    console.log('🔄 ProductFeed: Product deleted, reloading...');
-    loadProducts();
-    if (onProductDeleted) {
-      onProductDeleted();
+  const loadMore = async () => {
+    if (!hasMore || loading) return;
+
+    try {
+      setLoading(true);
+      let productsQuery;
+      const productsRef = collection(db, 'products');
+
+      if (mode === 'user' && userId) {
+        productsQuery = query(
+          productsRef,
+          where('sellerId', '==', userId),
+          orderBy('createdAt', 'desc'),
+          startAfter(lastVisible),
+          limit(10)
+        );
+      } else {
+        productsQuery = query(
+          productsRef,
+          orderBy('createdAt', 'desc'),
+          startAfter(lastVisible),
+          limit(10)
+        );
+      }
+
+      const querySnapshot = await getDocs(productsQuery);
+      
+      const newProducts: Product[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        newProducts.push({
+          id: doc.id,
+          ...data,
+        } as Product);
+      });
+
+      setProducts(prev => [...prev, ...newProducts]);
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      setHasMore(newProducts.length === 10);
+    } catch (error) {
+      console.error('Error loading more products:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('🎯 ProductFeed: Screen focused, reloading products...');
-      loadProducts();
-    }, [mode, userId])
-  );
-
   useEffect(() => {
     loadProducts();
-  }, [mode, userId]);
+  }, [loadProducts]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadProducts();
+  const handleRefresh = () => {
+    loadProducts(true);
   };
 
-  // Determine which products to display
-  const productsToDisplay = hasSearched ? searchResults : products;
+  const handleProductDeleted = () => {
+    if (onProductDeleted) {
+      onProductDeleted();
+    }
+    loadProducts(true);
+  };
 
-  if (isSearching) {
+  const handleLikePress = (productId: string) => {
+    // Implement like functionality
+    console.log('Like pressed for product:', productId);
+  };
+
+  if (loading && products.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#00A86B" />
-        <Text style={styles.loadingText}>Searching products...</Text>
+        <Text>Loading products...</Text>
       </View>
     );
   }
 
-  if (loading && !hasSearched) {
+  if (products.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#00A86B" />
-        <Text style={styles.loadingText}>Loading products...</Text>
-      </View>
-    );
-  }
-
-  if (hasSearched && searchResults.length === 0) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.emptyText}>No products found</Text>
-        <Text style={styles.emptySubText}>Try different search terms</Text>
-      </View>
-    );
-  }
-
-  if (productsToDisplay.length === 0) {
-    return (
-      <View style={styles.centerContainer}>
+        <Text>No products found</Text>
         <Text style={styles.emptyText}>
-          {mode === 'user' ? "You haven't posted any products yet!" : "No products found"}
-        </Text>
-        <Text style={styles.emptySubText}>
-          {mode === 'user' ? "Start selling by adding your first product!" : "Be the first to list a product!"}
+          {mode === 'user' ? 'This user has no products yet.' : 'No products available.'}
         </Text>
       </View>
     );
@@ -153,36 +198,36 @@ const ProductFeed = ({
 
   return (
     <View style={styles.container}>
-      {hasSearched && (
-        <View style={styles.searchInfo}>
-          <Text style={styles.searchInfoText}>
-            Found {searchResults.length} product{searchResults.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      )}
-      
       <FlatList
-        data={productsToDisplay}
+        data={products}
         renderItem={({ item }) => (
-          <View style={{ width: SCREEN_WIDTH }}>
-            <ProductCard
-              product={item}
-              isLiked={item.likedBy?.includes(user?.uid || '')}
-              mode={mode === 'user' ? 'profile' : 'default'}
-              onProductDeleted={handleProductDeleted}
-            />
-          </View>
+          <ProductCard
+            product={item}
+            onLikePress={() => handleLikePress(item.id)}
+            isLiked={false}
+            mode={mode === 'user' ? 'profile' : 'default'}
+            isOwnProfile={isOwnProfile}
+            onProductDeleted={handleProductDeleted}
+          />
         )}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={handleRefresh}
             colors={['#00A86B']}
-            tintColor={'#00A86B'}
           />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          hasMore ? (
+            <View style={styles.footer}>
+              <ActivityIndicator size="small" color="#00A86B" />
+              <Text style={styles.footerText}>Loading more products...</Text>
+            </View>
+          ) : null
         }
       />
     </View>
@@ -192,12 +237,7 @@ const ProductFeed = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
-    paddingBottom: 10
-  },
-  listContent: {
-    paddingVertical: 8,
-    paddingHorizontal: 0,
+    backgroundColor: '#f8f9fa',
   },
   centerContainer: {
     flex: 1,
@@ -205,32 +245,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-  },
   emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  emptySubText: {
-    fontSize: 14,
+    marginTop: 8,
     color: '#666',
     textAlign: 'center',
   },
-  searchInfo: {
+  footer: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    alignItems: 'center',
   },
-  searchInfoText: {
+  footerText: {
+    marginTop: 8,
+    color: '#666',
     fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
   },
 });
 
