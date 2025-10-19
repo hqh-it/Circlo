@@ -10,16 +10,21 @@ import {
   View,
 } from 'react-native';
 import { db } from '../../firebaseConfig';
+import { getAuctionProducts } from '../../services/Auction/auctionService';
 import ProductCard from './ProductCard';
 
 interface Product {
   id: string;
+  type?: 'normal' | 'auction';
   images: string[];
   title: string;
   price: number;
   address: {
     district?: string;
     province?: string;
+    street?: string;
+    ward?: string;
+    fullAddress?: string;
   };
   likeCount: number;
   viewCount?: number;
@@ -28,20 +33,40 @@ interface Product {
   condition?: string;
   createdAt?: any;
   sellerId: string;
+  // Auction specific fields
+  auctionInfo?: {
+    currentBid: number;
+    startPrice: number;
+    startTime: Date;
+    endTime: Date;
+    bidCount: number;
+    status: 'active' | 'ended';
+    bidIncrement: number;
+    buyNowPrice?: number;
+    highestBidder?: string | null;
+  };
 }
 
 interface ProductFeedProps {
   mode?: 'all' | 'user' | 'following';
+  productType?: 'normal' | 'auction' | 'all';
   userId?: string;
   isOwnProfile?: boolean;
   onProductDeleted?: () => void;
+  externalProducts?: Product[];
+  isExternalData?: boolean;
 }
+
+const PAGE_SIZE = 10;
 
 const ProductFeed: React.FC<ProductFeedProps> = ({
   mode = 'all',
+  productType = 'normal',
   userId,
   isOwnProfile = false,
   onProductDeleted,
+  externalProducts,
+  isExternalData = false,
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +74,117 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
 
+  // Handle external data
+  useEffect(() => {
+    if (isExternalData && externalProducts) {
+      setProducts(externalProducts);
+      setLoading(false);
+      setHasMore(false);
+    }
+  }, [externalProducts, isExternalData]);
+
+  // Load auction products - FIXED: Correct data mapping
+  const loadAuctionProducts = useCallback(async (filters: any = {}) => {
+    try {
+      
+      const result = await getAuctionProducts(filters);
+      
+      if (result.success) {
+        
+
+        return result.products.map(auction => {
+          return {
+            id: auction.id,
+            type: 'auction' as const,
+            images: auction.images || [],
+            title: auction.title,
+            price: auction.startPrice,
+            address: auction.address || {},
+            likeCount: 0,
+            viewCount: auction.viewCount,
+            sellerAvatar: auction.sellerAvatar,
+            sellerName: auction.sellerName,
+            condition: auction.condition,
+            createdAt: auction.createdAt,
+            sellerId: auction.sellerId,
+           
+            auctionInfo: {
+              currentBid: auction.currentBid, 
+              startPrice: auction.startPrice, 
+              startTime: auction.auctionInfo?.startTime,
+              endTime: auction.auctionInfo?.endTime,
+              bidCount: auction.auctionInfo?.bidCount || 0,
+              status: auction.auctionInfo?.status || 'active',
+              bidIncrement: auction.auctionInfo?.bidIncrement,
+              buyNowPrice: auction.auctionInfo?.buyNowPrice,
+              highestBidder: auction.auctionInfo?.highestBidder
+            }
+          };
+        });
+      } else {
+        throw new Error(result.error || 'Failed to load auctions');
+      }
+    } catch (error) {
+      console.error('💥 Error loading auction products:', error);
+      throw error;
+    }
+  }, []);
+
+  const loadNormalProducts = useCallback(async (isLoadMore = false) => {
+    try {
+      const productsRef = collection(db, 'products');
+      let productsQuery;
+
+      if (mode === 'user' && userId) {
+        const baseQuery = query(
+          productsRef,
+          where('sellerId', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
+
+        productsQuery = isLoadMore
+          ? query(baseQuery, startAfter(lastVisible), limit(PAGE_SIZE))
+          : query(baseQuery, limit(PAGE_SIZE));
+      } else {
+        const baseQuery = query(productsRef, orderBy('createdAt', 'desc'));
+        
+        productsQuery = isLoadMore
+          ? query(baseQuery, startAfter(lastVisible), limit(PAGE_SIZE))
+          : query(baseQuery, limit(PAGE_SIZE));
+      }
+      
+      const querySnapshot = await getDocs(productsQuery);
+      const newProducts: Product[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        newProducts.push({
+          id: doc.id,
+          ...data,
+          type: 'normal' as const
+        } as Product);
+      });
+
+
+      if (!isLoadMore) {
+        setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      }
+      
+      setHasMore(newProducts.length === PAGE_SIZE);
+
+      return newProducts;
+    } catch (error) {
+      console.error('💥 Error loading normal products:', error);
+      throw error;
+    }
+  }, [mode, userId, lastVisible]);
+
+
   const loadProducts = useCallback(async (isRefresh = false) => {
+    if (isExternalData) {
+      return;
+    }
+
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -57,41 +192,26 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         setLoading(true);
       }
 
-      let productsQuery;
-      const productsRef = collection(db, 'products');
+      let productsData: Product[] = [];
 
-      if (mode === 'user' && userId) {
-        productsQuery = query(
-          productsRef,
-          where('sellerId', '==', userId),
-          orderBy('createdAt', 'desc'),
-          limit(10)
-        );
-      } else if (mode === 'following') {
-        // Implement following logic here
-        productsQuery = query(
-          productsRef,
-          orderBy('createdAt', 'desc'),
-          limit(10)
-        );
+      if (productType === 'auction') {
+
+        let filters: any = { status: 'active' };
+
+        if (mode === 'user' && userId) {
+          filters = { ...filters, sellerId: userId };
+        }
+
+        productsData = await loadAuctionProducts(filters);
+        
+        setHasMore(false);
       } else {
-        productsQuery = query(
-          productsRef,
-          orderBy('createdAt', 'desc'),
-          limit(10)
-        );
+        productsData = await loadNormalProducts(false);
+        
+        if (!isRefresh) {
+          setLastVisible(productsData[productsData.length - 1]);
+        }
       }
-
-      const querySnapshot = await getDocs(productsQuery);
-      
-      const productsData: Product[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        productsData.push({
-          id: doc.id,
-          ...data,
-        } as Product);
-      });
 
       if (isRefresh) {
         setProducts(productsData);
@@ -99,98 +219,79 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         setProducts(productsData);
       }
 
-      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
-      setHasMore(productsData.length === 10);
     } catch (error) {
-      console.error('Error loading products:', error);
+      console.error('💥 Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [mode, userId]);
+  }, [mode, userId, isExternalData, productType, loadAuctionProducts, loadNormalProducts]);
+
 
   const loadMore = async () => {
-    if (!hasMore || loading) return;
+    if (!hasMore || loading || isExternalData || productType === 'auction') {
+      return;
+    }
 
     try {
       setLoading(true);
-      let productsQuery;
-      const productsRef = collection(db, 'products');
-
-      if (mode === 'user' && userId) {
-        productsQuery = query(
-          productsRef,
-          where('sellerId', '==', userId),
-          orderBy('createdAt', 'desc'),
-          startAfter(lastVisible),
-          limit(10)
-        );
-      } else {
-        productsQuery = query(
-          productsRef,
-          orderBy('createdAt', 'desc'),
-          startAfter(lastVisible),
-          limit(10)
-        );
-      }
-
-      const querySnapshot = await getDocs(productsQuery);
       
-      const newProducts: Product[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        newProducts.push({
-          id: doc.id,
-          ...data,
-        } as Product);
-      });
-
+      const newProducts = await loadNormalProducts(true);
+      
       setProducts(prev => [...prev, ...newProducts]);
-      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
-      setHasMore(newProducts.length === 10);
+      
+      if (newProducts.length > 0) {
+        setLastVisible(newProducts[newProducts.length - 1]);
+      }
     } catch (error) {
-      console.error('Error loading more products:', error);
+      console.error('💥 Error loading more products:', error);
     } finally {
       setLoading(false);
     }
   };
 
+
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (!isExternalData) {
+      loadProducts();
+    }
+  }, [loadProducts, isExternalData]);
+
 
   const handleRefresh = () => {
-    loadProducts(true);
+    if (!isExternalData) {
+      loadProducts(true);
+    }
   };
+
 
   const handleProductDeleted = () => {
-    if (onProductDeleted) {
-      onProductDeleted();
+    onProductDeleted?.();
+    
+    if (!isExternalData) {
+      loadProducts(true);
     }
-    loadProducts(true);
-  };
-
-  const handleLikePress = (productId: string) => {
-    // Implement like functionality
-    console.log('Like pressed for product:', productId);
   };
 
   if (loading && products.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#00A86B" />
-        <Text>Loading products...</Text>
+        <Text>Loading {productType === 'auction' ? 'auctions' : 'products'}...</Text>
       </View>
     );
   }
 
+
   if (products.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <Text>No products found</Text>
+        <Text>No {productType === 'auction' ? 'auctions' : 'products'} found</Text>
         <Text style={styles.emptyText}>
-          {mode === 'user' ? 'This user has no products yet.' : 'No products available.'}
+          {mode === 'user' 
+            ? `This user has no ${productType === 'auction' ? 'auctions' : 'products'} yet.` 
+            : `No ${productType === 'auction' ? 'auctions' : 'products'} available.`}
         </Text>
       </View>
     );
@@ -203,8 +304,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         renderItem={({ item }) => (
           <ProductCard
             product={item}
-            onLikePress={() => handleLikePress(item.id)}
-            isLiked={false}
             mode={mode === 'user' ? 'profile' : 'default'}
             isOwnProfile={isOwnProfile}
             onProductDeleted={handleProductDeleted}
@@ -213,16 +312,18 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#00A86B']}
-          />
+          !isExternalData ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#00A86B']}
+            />
+          ) : undefined
         }
-        onEndReached={loadMore}
+        onEndReached={isExternalData || productType === 'auction' ? undefined : loadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
-          hasMore ? (
+          hasMore && !isExternalData && productType !== 'auction' ? (
             <View style={styles.footer}>
               <ActivityIndicator size="small" color="#00A86B" />
               <Text style={styles.footerText}>Loading more products...</Text>

@@ -17,6 +17,7 @@ function Homepage() {
     const [hasSearched, setHasSearched] = useState(false);
     const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
     const [hasFiltered, setHasFiltered] = useState(false);
+    const [productType, setProductType] = useState<'normal' | 'auction'>('normal'); // NEW: State for product type
 
     useEffect(() => {
         StatusBar.setBarStyle('light-content');
@@ -31,8 +32,6 @@ function Homepage() {
                     if (docSnap.exists()) {
                         const userData = docSnap.data();
                         setFullname(userData.fullName);
-                    } else {
-                        console.log("No such document!");
                     }
                 } catch (error) {
                     console.log("Error getting document:", error);
@@ -65,18 +64,20 @@ function Homepage() {
     };
 
     const handleApplyFilters = (filterResult: any) => {
-        console.log('Received filter results:', filterResult);
         setFilteredProducts(filterResult.products);
         setHasFiltered(true);
         setHasSearched(false);
     };
 
-    const handleFocus = () => {
-        console.log('Search bar focused');
-    };
+    const handleFocus = () => {};
 
-    const handleBlur = () => {
-        console.log('Search bar blurred');
+    const handleBlur = () => {};
+
+    // NEW: Handle tab change from AppFooter
+    const handleTabChange = (type: 'normal' | 'auction') => {
+        setProductType(type);
+        // Clear any active search/filter when switching tabs
+        handleClearSearch();
     };
 
     return (
@@ -88,7 +89,7 @@ function Homepage() {
                 
                 <View style={styles.searchContainer}>
                     <SearchBar 
-                        placeholder="Search products..."
+                        placeholder={productType === 'normal' ? "Search products..." : "Search auctions..."}
                         onSearchResults={handleSearchResults}
                         onSearchStart={handleSearchStart}
                         onSearchEnd={handleSearchEnd}
@@ -99,15 +100,26 @@ function Homepage() {
                 </View>
                 
                 <View style={styles.content}>
-                    <ProductFeed 
-                        searchResults={hasSearched ? searchResults : (hasFiltered ? filteredProducts : [])}
-                        isSearching={isSearching}
-                        hasSearched={hasSearched || hasFiltered}
-                    />
+                    {hasSearched || hasFiltered ? (
+                        <ProductFeed 
+                            mode="all"
+                            productType={productType} // NEW: Pass product type
+                            externalProducts={hasSearched ? searchResults : filteredProducts}
+                            isExternalData={true}
+                        />
+                    ) : (
+                        <ProductFeed 
+                            mode="all" 
+                            productType={productType} // NEW: Pass product type
+                        />
+                    )}
                 </View>
                 
                 <View style={styles.footer}>
-                    <Appfooter />
+                    <Appfooter 
+                        onTabChange={handleTabChange} // NEW: Pass callback to AppFooter
+                        currentTab={productType} // NEW: Pass current tab
+                    />
                 </View>
             </View>
         </SafeAreaView>

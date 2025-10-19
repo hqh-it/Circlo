@@ -47,28 +47,39 @@ interface UserAddress {
   wardCode?: string;
 }
 
-const AddProduct = () => {
+interface AddProductProps {
+  onProductAdded?: (product: any) => void;
+  isAuctionFlow?: boolean;
+  showHeader?: boolean;
+  initialData?: any;
+  onFormDataChange?: (data: any) => void;
+}
+
+const AddProduct = ({ 
+  onProductAdded, 
+  isAuctionFlow = false, 
+  showHeader = true,
+  initialData,
+  onFormDataChange 
+}: AddProductProps) => {
   const { user } = useAuth();
-  const [title, setTitle] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const [condition, setCondition] = useState<string>('like_new');
-  const [price, setPrice] = useState<string>('');
-  const [category, setCategory] = useState<string>('');
-  const [images, setImages] = useState<string[]>([]); 
-  const [video, setVideo] = useState<string | null>(null); 
-  const [loading, setLoading] = useState<boolean>(false); 
+  const [title, setTitle] = useState<string>(initialData?.title || '');
+  const [description, setDescription] = useState<string>(initialData?.description || '');
+  const [condition, setCondition] = useState<string>(initialData?.condition || 'like_new');
+  const [price, setPrice] = useState<string>(initialData?.price || '');
+  const [category, setCategory] = useState<string>(initialData?.category || '');
+  const [images, setImages] = useState<string[]>(initialData?.images || []);
+  const [video, setVideo] = useState<string | null>(initialData?.video || null);
+  const [loading, setLoading] = useState<boolean>(false);
   
-  // State for address data
   const [provinces, setProvinces] = useState<AddressItem[]>([]);
   const [districts, setDistricts] = useState<AddressItem[]>([]);
   const [wards, setWards] = useState<AddressItem[]>([]);
   
-  // Separate states for default and custom addresses
   const [useDefaultAddress, setUseDefaultAddress] = useState<boolean>(true);
   const [userAddress, setUserAddress] = useState<UserAddress | null>(null);
-  const [userData, setUserData] = useState<any>(null); 
+  const [userData, setUserData] = useState<any>(null);
 
-  // Custom address states
   const [customStreet, setCustomStreet] = useState<string>('');
   const [customProvince, setCustomProvince] = useState<string>('');
   const [customDistrict, setCustomDistrict] = useState<string>('');
@@ -91,13 +102,11 @@ const AddProduct = () => {
     { label: 'Fair Condition (50%)', value: 'used_fair' }
   ];
 
-  // Load provinces on mount
   useEffect(() => {
     const data = fetchProvinces();
     setProvinces(Array.isArray(data) ? data : []);
   }, []);
 
-  // Load districts when custom province changes
   useEffect(() => {
     if (customProvince) {
       const data = fetchDistricts(customProvince);
@@ -108,7 +117,6 @@ const AddProduct = () => {
     }
   }, [customProvince]);
 
-  // Load wards when custom district changes
   useEffect(() => {
     if (customDistrict) {
       const data = fetchWards(customDistrict);
@@ -117,16 +125,11 @@ const AddProduct = () => {
     }
   }, [customDistrict]);
 
-  // Load user address and user data when component mounts
   useEffect(() => {
     const loadUserAddress = async () => {
-      if (!user) {
-        console.log('No user found');
-        return;
-      }
+      if (!user) return;
       
       try {
-        console.log('Loading user data for address...');
         const userData = await loadUserData(user);
         setUserData(userData);
         
@@ -141,11 +144,7 @@ const AddProduct = () => {
             districtCode: userData.address.districtCode || '',
             wardCode: userData.address.wardCode || ''
           };
-          
           setUserAddress(addressData);
-          console.log('User address loaded:', addressData);
-        } else {
-          console.log('No address found in user data');
         }
       } catch (error) {
         console.error('Error loading user address:', error);
@@ -154,6 +153,62 @@ const AddProduct = () => {
 
     loadUserAddress();
   }, [user]);
+
+  useEffect(() => {
+    if (onFormDataChange) {
+      const formData = {
+        title,
+        description,
+        condition,
+        price,
+        category,
+        images,
+        video,
+        address: getCurrentAddressData()
+      };
+      onFormDataChange(formData);
+    }
+  }, [title, description, condition, price, category, images, video, useDefaultAddress, customAddressConfirmed, onFormDataChange]);
+
+  const getCurrentAddressData = () => {
+    if (useDefaultAddress) {
+      return userAddress ? {
+        useDefault: true,
+        street: userAddress.street || '',
+        province: userAddress.province || '',
+        district: userAddress.district || '',
+        ward: userAddress.ward || '',
+        fullAddress: userAddress.fullAddress || '',
+        provinceCode: userAddress.provinceCode || '',
+        districtCode: userAddress.districtCode || '',
+        wardCode: userAddress.wardCode || ''
+      } : null;
+    } else {
+      if (customAddressConfirmed) {
+        const { provinceName, districtName, wardName } = getAddressNames(
+          customProvince,
+          customDistrict,
+          customWard,
+          provinces,
+          districts,
+          wards
+        );
+
+        return {
+          useDefault: false,
+          street: customStreet,
+          province: provinceName,
+          district: districtName,
+          ward: wardName,
+          fullAddress: customAddressFull,
+          provinceCode: customProvince,
+          districtCode: customDistrict,
+          wardCode: customWard
+        };
+      }
+      return null;
+    }
+  };
 
   const getDisplayAddress = (): string => {
     if (!userAddress) return "No default address available";
@@ -253,6 +308,63 @@ const AddProduct = () => {
     setUseDefaultAddress(false);
   };
 
+  const handleAuctionProduct = async (addressData: any): Promise<void> => {
+    const productData = {
+      title,
+      description,
+      price,
+      condition,
+      category,
+      images,
+      video,
+      address: addressData
+    };
+
+    if (onProductAdded) {
+      onProductAdded(productData);
+    }
+  };
+
+  const handleNormalProduct = async (addressData: any): Promise<void> => {
+    if (!user) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
+
+    const result = await createProduct(
+      {
+        title,
+        description,
+        price,
+        condition,
+        category,
+        images,
+        video,
+        address: addressData
+      },
+      user.uid,
+      userData
+    );
+
+    if (result.success) {
+      Alert.alert('Success', 'Product has been listed successfully!');
+      setTitle('');
+      setDescription('');
+      setPrice('');
+      setCategory('');
+      setImages([]);
+      setVideo(null);
+      setCustomAddressConfirmed(false);
+      setCustomStreet('');
+      setCustomProvince('');
+      setCustomDistrict('');
+      setCustomWard('');
+      setCustomAddressFull('');
+    } else {
+      Alert.alert('Error', result.error || 'Failed to create product');
+    }
+  };
+
   const handleSubmit = async (): Promise<void> => {
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter product title');
@@ -284,7 +396,7 @@ const AddProduct = () => {
       return;
     }
 
-    if (!user || !userData) {
+    if (!user) {
       Alert.alert('Error', 'User information not found');
       return;
     }
@@ -292,99 +404,34 @@ const AddProduct = () => {
     setLoading(true);
 
     try {
-      let addressData;
+      const addressData = getCurrentAddressData();
       
-      if (useDefaultAddress) {
-        addressData = { 
-          useDefault: true,
-          street: userAddress?.street || '',
-          province: userAddress?.province || '',
-          district: userAddress?.district || '',
-          ward: userAddress?.ward || '',
-          fullAddress: userAddress?.fullAddress || '',
-          provinceCode: userAddress?.provinceCode || '',
-          districtCode: userAddress?.districtCode || '',
-          wardCode: userAddress?.wardCode || ''
-        };
+      if (isAuctionFlow) {
+        await handleAuctionProduct(addressData);
       } else {
-        const { provinceName, districtName, wardName } = getAddressNames(
-          customProvince,
-          customDistrict,
-          customWard,
-          provinces,
-          districts,
-          wards
-        );
-
-        addressData = {
-          useDefault: false,
-          street: customStreet,
-          province: provinceName,    
-          district: districtName,    
-          ward: wardName,            
-          fullAddress: customAddressFull,
-          provinceCode: customProvince,
-          districtCode: customDistrict, 
-          wardCode: customWard
-        };
+        await handleNormalProduct(addressData);
       }
-
-      console.log('Creating product with data:', {
-        title,
-        description,
-        condition,
-        price,
-        category,
-        images: images.length,
-        video: video ? 'Yes' : 'No',
-        address: addressData
-      });
-
-      const result = await createProduct(
-        {
-          title,
-          description,
-          price,
-          condition,
-          category,
-          images,
-          video,
-          address: addressData
-        },
-        user.uid,
-        userData
-      );
-
-      if (result.success) {
-        Alert.alert('Success', 'Product has been listed successfully!');
-        // Reset form
-        setTitle('');
-        setDescription('');
-        setPrice('');
-        setCategory('');
-        setImages([]);
-        setVideo(null);
-        setCustomAddressConfirmed(false);
-        setCustomStreet('');
-        setCustomProvince('');
-        setCustomDistrict('');
-        setCustomWard('');
-        setCustomAddressFull('');
-        console.log('Product created with ID:', result.productId);
-      } else {
-        Alert.alert('Error', result.error || 'Failed to create product');
-      }
+      
     } catch (error: any) {
-      console.error('Error in handleSubmit:', error);
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
 
+  const isFormValid = (): boolean => {
+    return !!(title.trim() && 
+              description.trim() && 
+              price.trim() && 
+              parseFloat(price) > 0 && 
+              category && 
+              images.length > 0 && 
+              getCurrentAddressData());
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Add Product" />
+      {showHeader && <Header title="Add Product" />}
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Product Information</Text>
 
@@ -462,7 +509,7 @@ const AddProduct = () => {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Images * ({images.length}/5)</Text>
           <TouchableOpacity style={styles.uploadButton} onPress={pickImages}>
-            <Text style={styles.uploadButtonText}>📷 Select Images</Text>
+            <Text style={styles.uploadButtonText}>Select Images</Text>
           </TouchableOpacity>
 
           {images.length > 0 && (
@@ -489,7 +536,7 @@ const AddProduct = () => {
             onPress={pickVideo}
           >
             <Text style={styles.uploadButtonText}>
-              🎥 {video ? 'Video Selected' : 'Select Video (max 1 minute)'}
+              {video ? 'Video Selected' : 'Select Video (max 1 minute)'}
             </Text>
           </TouchableOpacity>
 
@@ -504,7 +551,7 @@ const AddProduct = () => {
                 isLooping={false}
               />
               <TouchableOpacity style={styles.removeVideoButton} onPress={removeVideo}>
-                <Text style={styles.removeVideoText}>🗑️ Remove Video</Text>
+                <Text style={styles.removeVideoText}>Remove Video</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -538,7 +585,7 @@ const AddProduct = () => {
           {useDefaultAddress && (
             <View style={styles.defaultAddressContainer}>
               <Text style={styles.defaultAddressText}>
-                📍 {getDisplayAddress()}
+                {getDisplayAddress()}
               </Text>
               {!userAddress && (
                 <Text style={styles.noAddressText}>
@@ -589,7 +636,7 @@ const AddProduct = () => {
 
               {(customProvince || customDistrict || customWard || customStreet) && (
                 <View style={styles.addressPreview}>
-                  <Text style={styles.previewTitle}>📍 Address Preview</Text>
+                  <Text style={styles.previewTitle}>Address Preview</Text>
                   
                   <View style={styles.previewSection}>
                     <Text style={styles.previewLabel}>Street:</Text>
@@ -629,35 +676,36 @@ const AddProduct = () => {
                 onPress={confirmCustomAddress}
                 disabled={!customStreet || !customProvince || !customDistrict || !customWard}
               >
-                <Text style={styles.confirmButtonText}>✅ Confirm This Address</Text>
+                <Text style={styles.confirmButtonText}>Confirm This Address</Text>
               </TouchableOpacity>
             </>
           )}
 
           {!useDefaultAddress && customAddressConfirmed && (
             <View style={styles.confirmedAddressContainer}>
-              <Text style={styles.confirmedAddressTitle}>📍 Confirmed Address:</Text>
+              <Text style={styles.confirmedAddressTitle}>Confirmed Address:</Text>
               <Text style={styles.confirmedAddressText}>{customAddressFull}</Text>
               <TouchableOpacity style={styles.editAddressButton} onPress={editCustomAddress}>
-                <Text style={styles.editAddressText}>✏️ Edit Address</Text>
+                <Text style={styles.editAddressText}>Edit Address</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        <TouchableOpacity 
-          style={[
-            styles.submitButton, 
-            ((!useDefaultAddress && !customAddressConfirmed) || loading) && styles.submitButtonDisabled
-          ]} 
-          onPress={handleSubmit}
-          disabled={(!useDefaultAddress && !customAddressConfirmed) || loading}
-        >
-          <Text style={styles.submitButtonText}>
-            {loading ? 'Creating Product...' : 
-             (!useDefaultAddress && !customAddressConfirmed) ? 'Please confirm address' : 'Add Product'}
-          </Text>
-        </TouchableOpacity>
+        {!isAuctionFlow && (
+          <TouchableOpacity 
+            style={[
+              styles.submitButton, 
+              (!isFormValid() || loading) && styles.submitButtonDisabled
+            ]} 
+            onPress={handleSubmit}
+            disabled={!isFormValid() || loading}
+          >
+            <Text style={styles.submitButtonText}>
+              {loading ? 'Creating Product...' : 'Add Product'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -665,6 +713,7 @@ const AddProduct = () => {
   );
 };
 
+// Styles remain exactly the same...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -680,8 +729,6 @@ const styles = StyleSheet.create({
     color: '#00A86B',
     marginBottom: 24,
     textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   inputGroup: {
     marginBottom: 20,
@@ -783,11 +830,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
   },
   removeImageText: {
     color: '#fff',
@@ -877,7 +919,6 @@ const styles = StyleSheet.create({
     color: '#ff6b6b',
     textAlign: 'center',
     marginTop: 8,
-    fontStyle: 'italic',
   },
   addressInput: {
     marginBottom: 16,
@@ -973,11 +1014,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     marginVertical: 20,
-    shadowColor: '#00A86B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   submitButtonDisabled: {
     backgroundColor: '#cccccc',
@@ -986,7 +1022,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    letterSpacing: 1,
   },
   spacer: {
     height: 30,

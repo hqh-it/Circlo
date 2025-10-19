@@ -1,4 +1,3 @@
-// THAY THẾ TOÀN BỘ AppFooter.tsx
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -9,7 +8,12 @@ import { chatService } from "../../services/Chat/chatService";
 
 const { height, width } = Dimensions.get("window");
 
-export default function Appfooter() {
+interface AppFooterProps {
+  onTabChange?: (tab: 'normal' | 'auction') => void; // NEW: Callback for tab changes
+  currentTab?: 'normal' | 'auction'; // NEW: Current active tab
+}
+
+export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFooterProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -40,6 +44,31 @@ export default function Appfooter() {
     }, [user])
   );
 
+  // NEW: Handle home button press
+  const handleHomePress = () => {
+    if (onTabChange) {
+      onTabChange('normal');
+    }
+    // Không cần navigate vì đang ở home, chỉ cần thay đổi state
+  };
+
+  // NEW: Handle auction button press
+  const handleAuctionPress = () => {
+    if (onTabChange) {
+      onTabChange('auction');
+    }
+    // Không navigate đến auctionHome nữa, chỉ thay đổi content
+  };
+
+  // NEW: Handle add product/auction based on current tab
+  const handleAddPress = () => {
+    if (currentTab === 'normal') {
+      router.push('/screens/Products/add_product');
+    } else {
+      router.push('/screens/Auction/add_auction_product');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -48,14 +77,26 @@ export default function Appfooter() {
         end={{ x: 1, y: 0 }}
         style={styles.gradient}
       >
-        {/* Home Button */}
-        <TouchableOpacity>
-          <Image style={styles.icon} source={require("../assets/icons/home.png")} />
+        {/* Home Button - Normal Products */}
+        <TouchableOpacity onPress={handleHomePress}>
+          <Image 
+            style={[
+              styles.icon, 
+              currentTab === 'normal' && styles.activeIcon // Highlight khi active
+            ]} 
+            source={require("../assets/icons/home.png")} 
+          />
         </TouchableOpacity>
 
-        {/* Auction Button */}
-        <TouchableOpacity>
-          <Image style={styles.icon} source={require("../assets/icons/auction.png")} />
+        {/* Auction Button - Auction Products */}
+        <TouchableOpacity onPress={handleAuctionPress}>
+          <Image 
+            style={[
+              styles.icon, 
+              currentTab === 'auction' && styles.activeIcon // Highlight khi active
+            ]} 
+            source={require("../assets/icons/auction.png")} 
+          />
         </TouchableOpacity>
 
         <View style={{ width: width * 0.01 }} />
@@ -81,7 +122,10 @@ export default function Appfooter() {
       </LinearGradient>
       
       <View style={styles.under_main_button}>
-        <TouchableOpacity style={styles.main_button} onPress={() => router.push('/screens/Products/add_product')}>
+        <TouchableOpacity 
+          style={styles.main_button} 
+          onPress={handleAddPress} // NEW: Dynamic add based on current tab
+        >
           <Image style={styles.icon} source={require("../assets/icons/flus.png")} />
         </TouchableOpacity>
       </View>
@@ -110,6 +154,11 @@ const styles = StyleSheet.create({
     width: height * 0.04,
     margin: height * 0.01,
     tintColor: "white",
+  },
+  // NEW: Active icon style
+  activeIcon: {
+    tintColor: '#FFD700', // Màu vàng cho icon active
+    transform: [{ scale: 1.1 }], // Phóng to nhẹ khi active
   },
   chatIconContainer: {
     position: 'relative',

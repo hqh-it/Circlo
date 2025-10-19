@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -9,17 +9,34 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { deleteAuctionProduct } from '../../services/Auction/auctionService';
 import { deleteProduct, formatPrice, getConditionText, getTimeAgo } from '../../services/Product/productService';
+
+interface AuctionInfo {
+  currentBid: number;
+  startPrice: number;
+  startTime: any;
+  endTime: any;
+  bidCount: number;
+  status: 'active' | 'ended';
+  bidIncrement: number;
+  buyNowPrice?: number;
+  highestBidder?: string | null;
+}
 
 interface ProductCardProps {
   product: {
     id: string;
+    type?: 'normal' | 'auction';
     images: string[];
     title: string;
     price: number;
     address: {
       district?: string;
       province?: string;
+      street?: string;
+      ward?: string;
+      fullAddress?: string;
     };
     likeCount: number;
     viewCount?: number;
@@ -27,10 +44,10 @@ interface ProductCardProps {
     sellerName: string;
     condition?: string;
     createdAt?: any;
+    sellerId: string;
+    auctionInfo?: AuctionInfo;
   };
   onPress?: () => void;
-  onLikePress?: () => void;
-  isLiked?: boolean;
   mode?: 'default' | 'profile';
   onProductDeleted?: () => void;
   isOwnProfile?: boolean;
@@ -38,29 +55,122 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
-  onPress,
-  onLikePress,
-  isLiked = false,
   mode = 'default',
   onProductDeleted,
   isOwnProfile = false,
 }) => {
   const router = useRouter();
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
   
+  const isAuction = product.type === 'auction' && product.auctionInfo;
+
+  const convertFirestoreTimestamp = (timestamp: any): Date => {
+    if (!timestamp) return new Date();
+    
+    if (timestamp.seconds && timestamp.nanoseconds !== undefined) {
+      return new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
+    }
+  
+    if (timestamp instanceof Date) {
+      return timestamp;
+    }
+    
+    try {
+      return new Date(timestamp);
+    } catch (error) {
+      console.error('Error converting timestamp:', error);
+      return new Date();
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuction || !product.auctionInfo) return;
+
+    const updateCountdown = () => {
+      try {
+        const now = new Date().getTime();
+        const startTime = convertFirestoreTimestamp(product.auctionInfo!.startTime).getTime();
+        const endTime = convertFirestoreTimestamp(product.auctionInfo!.endTime).getTime();
+        
+        let diff = 0;
+        let status: 'not_started' | 'active' | 'ended';
+
+        if (now < startTime) {
+          diff = startTime - now;
+          status = 'not_started';
+        } else if (now > endTime) {
+          status = 'ended';
+        } else {
+          diff = endTime - now;
+          status = 'active';
+        }
+
+        if (status === 'ended') {
+          setTimeRemaining('Ended');
+          return;
+        }
+
+        if (status === 'not_started') {
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          
+          if (days > 0) {
+            setTimeRemaining(`${days}d ${hours}h`);
+          } else if (hours > 0) {
+            setTimeRemaining(`${hours}h ${minutes}m`);
+          } else {
+            setTimeRemaining(`${minutes}m`);
+          }
+        } else {
+
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          
+          if (hours > 0) {
+            setTimeRemaining(`${hours}h ${minutes}m`);
+          } else {
+            setTimeRemaining(`${minutes}m`);
+          }
+        }
+      } catch (error) {
+        console.error('Error updating countdown:', error);
+        setTimeRemaining('Time error');
+      }
+    };
+
+    updateCountdown();
+
+    const interval = setInterval(updateCountdown, 60000);
+
+    return () => clearInterval(interval);
+  }, [isAuction, product.auctionInfo]);
+
   const handleCardPress = () => {
-    router.push({
-      pathname: '/screens/Products/product_detail',
-      params: { id: product.id }
-    });
+    if (isAuction) {
+      router.push({
+        pathname: '/screens/Products/product_detail',
+        params: { id: product.id }
+      });
+    } else {
+      router.push({
+        pathname: '/screens/Products/product_detail',
+        params: { id: product.id }
+      });
+    }
   };
 
   const handleEdit = () => {
-    router.push(`/screens/Products/edit_product?productId=${product.id}`);
+    if (isAuction) {
+     
+    } else {
+      router.push(`/screens/Products/edit_product?productId=${product.id}`);
+    }
   };
 
   const handleDelete = async () => {
     Alert.alert(
-      'Delete Product',
+      `Delete ${isAuction ? 'Auction' : 'Product'}`,
       `Are you sure you want to delete "${product.title}"? This action cannot be undone.`,
       [
         {
@@ -72,23 +182,20 @@ const ProductCard: React.FC<ProductCardProps> = ({
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🗑️ Deleting product:', product.id);
-              
-              const result = await deleteProduct(product.id);
+              const result = isAuction 
+                ? await deleteAuctionProduct(product.id)
+                : await deleteProduct(product.id);
               
               if (result.success) {
-                console.log('✅ Product deleted successfully');
-                Alert.alert('Success', 'Product has been deleted successfully!');
+                Alert.alert('Success', `${isAuction ? 'Auction' : 'Product'} has been deleted successfully!`);
                 if (onProductDeleted) {
                   onProductDeleted();
                 }
               } else {
-                console.error('❌ Failed to delete product:', result.error);
-                Alert.alert('Error', result.error || 'Failed to delete product');
+                Alert.alert('Error', result.error || `Failed to delete ${isAuction ? 'auction' : 'product'}`);
               }
             } catch (error) {
-              console.error('❌ Error in handleDelete:', error);
-              Alert.alert('Error', 'Something went wrong while deleting the product');
+              Alert.alert('Error', 'Something went wrong while deleting');
             }
           },
         },
@@ -96,9 +203,51 @@ const ProductCard: React.FC<ProductCardProps> = ({
     );
   };
 
+  const formatAuctionTime = (date: any) => {
+    try {
+      const convertedDate = convertFirestoreTimestamp(date);
+      return convertedDate.toLocaleString('en-US', {
+        day: 'numeric',
+        month: 'numeric', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
+  const getLocationText = () => {
+    if (product.address.district && product.address.province) {
+      return `${product.address.district}, ${product.address.province}`;
+    }
+    return product.address.province || product.address.district || 'Unknown location';
+  };
+
+  const getDisplayPrice = () => {
+    let price = 0;
+
+    if (isAuction && product.auctionInfo) {
+      price = product.auctionInfo.startPrice || product.price;
+    } else {
+      price = product.price;
+    }
+    
+    if (typeof formatPrice === 'function') {
+      return formatPrice(price) + ' VND';
+    } else {
+      return price.toLocaleString('vi-VN') + ' VND';
+    }
+  };
+
+  const getConditionDisplay = () => {
+    return getConditionText(product.condition);
+  };
+
   return (
     <TouchableOpacity 
-      style={styles.container} 
+      style={[styles.container, isAuction && styles.auctionContainer]} 
       onPress={handleCardPress} 
       activeOpacity={0.9}
     >
@@ -115,6 +264,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
+
+        {isAuction && product.auctionInfo && (
+          <View style={styles.countdownSidebar}>
+            <Text style={styles.countdownText}>
+              {timeRemaining}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.productInfo}>
@@ -141,38 +298,47 @@ const ProductCard: React.FC<ProductCardProps> = ({
         
         <View style={styles.divider} />
         
-        <View style={styles.priceLocation}>
-          <Text style={styles.price}>💰 {formatPrice(product.price)} VND</Text>
+        {/* Price Section */}
+        <View style={styles.priceSection}>
+          {isAuction && product.auctionInfo ? (
+            <View style={styles.auctionPriceSection}>
+              <Text style={styles.startPrice}>
+                💰 Start Price: {getDisplayPrice()}
+              </Text>
+              <Text style={styles.auctionTime}>
+                ⏰ Start at: {formatAuctionTime(product.auctionInfo.startTime)}
+              </Text>
+              <Text style={styles.bidIncrement}>
+                📈 Min bid: {formatPrice(product.auctionInfo.bidIncrement)} VND
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.price}>💰 {getDisplayPrice()}</Text>
+          )}
+        </View>
+
+        {/* Location */}
+        <View style={styles.locationContainer}>
           <Text style={styles.location}>
-            📍 {product.address.province || product.address.district || 'Unknown'}
+            📍 {getLocationText()}
           </Text>
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.condition}>
-            {getConditionText(product.condition)}
+            {getConditionDisplay()}
           </Text>
           
+          {/* View count only */}
           <View style={styles.engagement}>
             <View style={styles.engagementItem}>
               <Text style={styles.engagementIcon}>👁️</Text>
               <Text style={styles.engagementText}>{product.viewCount || 0}</Text>
             </View>
-            
-            <TouchableOpacity 
-              style={[styles.likeButton, isLiked && styles.likeButtonActive]}
-              onPress={onLikePress}
-            >
-              <Text style={[styles.likeIcon, isLiked && styles.likeIconActive]}>
-                {isLiked ? '❤️' : '🤍'}
-              </Text>
-              <Text style={[styles.likeCount, isLiked && styles.likeCountActive]}>
-                {product.likeCount}
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
 
+        {/* Edit/Delete Buttons */}
         {mode === 'profile' && isOwnProfile && (
           <View style={styles.actionRow}>
             <TouchableOpacity 
@@ -208,6 +374,10 @@ const styles = StyleSheet.create({
     elevation: 6,
     overflow: 'hidden',
   },
+  auctionContainer: {
+    borderWidth: 1,
+    borderColor: '#FFA500',
+  },
   imageContainer: {
     position: 'relative',
   },
@@ -222,6 +392,23 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 80,
+  },
+  countdownSidebar: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  countdownText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   productInfo: {
     padding: 16,
@@ -275,16 +462,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     marginBottom: 12,
   },
-  priceLocation: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  priceSection: {
+    marginBottom: 8,
   },
   price: {
     fontSize: 17,
     fontWeight: '700',
     color: '#00A86B',
+  },
+  auctionPriceSection: {
+    marginBottom: 8,
+  },
+  startPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#00A86B',
+    marginBottom: 4,
+  },
+  auctionTime: {
+    fontSize: 13,
+    color: '#8e8e93',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  bidIncrement: {
+    fontSize: 13,
+    color: '#dbbf0fff',
+    fontWeight: '500',
+    marginBottom: 4,
+
+  },
+  currentBid: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF6B35',
+    marginBottom: 4,
+  },
+  locationContainer: {
+    marginBottom: 12,
   },
   location: {
     fontSize: 13,
@@ -308,7 +523,6 @@ const styles = StyleSheet.create({
   engagement: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   engagementItem: {
     flexDirection: 'row',
@@ -322,36 +536,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#8e8e93',
-  },
-  likeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e5e5ea',
-  },
-  likeButtonActive: {
-    backgroundColor: '#fff0f3',
-    borderColor: '#ff375f',
-  },
-  likeIcon: {
-    fontSize: 14,
-  },
-  likeIconActive: {
-    fontSize: 14,
-  },
-  likeCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8e8e93',
-  },
-  likeCountActive: {
-    color: '#ff375f',
-    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',

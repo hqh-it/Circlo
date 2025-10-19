@@ -2,21 +2,21 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    ImageBackground,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  ImageBackground,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../../firebaseConfig';
 import ProductFeed from '../../components/ProductFeed';
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 interface PublicUserData {
   id: string;
@@ -113,159 +113,147 @@ const PublicProfile: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollContainer}>
-        <View style={styles.container}>
-          <View style={{width: width, flexDirection: "column", justifyContent: "space-between"}}>
-            <ImageBackground source={require('../../assets/images/background_profile.jpg')}>
-              {/* Back Button */}
-              <TouchableOpacity 
-                style={styles.backButtonContainer}
-                onPress={() => router.back()}
-              >
-                <Text style={styles.backIcon}>‹</Text>
-              </TouchableOpacity>
-              
-              {/* Avatar */}
-              <View style={{justifyContent: "center", alignItems: "center", paddingVertical: 10}}>
-                <Image
-                  source={
-                    userData.avatarURL
-                      ? { uri: userData.avatarURL }
-                      : require("../../assets/icons/profile-picture.png")
-                  }
-                  style={{
-                    width: width * 0.35,
-                    height: width * 0.35,
-                    borderRadius: 100,
-                    borderWidth: 5,
-                    borderColor: "#D4A017",
-                  }}
-                />
-              </View>
-            </ImageBackground>
-          </View>
-
-          {/* Tabs */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, selectedTab === 'information' && styles.activeTab]}
-              onPress={() => setSelectedTab('information')}
+      <View style={styles.container}>
+        <View style={{width: width, flexDirection: "column", justifyContent: "space-between"}}>
+          <ImageBackground 
+            source={require('../../assets/images/background_profile.jpg')}
+            style={styles.headerBackground}
+          >
+            <TouchableOpacity 
+              style={styles.backButtonContainer}
+              onPress={() => router.back()}
             >
-              <Text style={[styles.tabText, selectedTab === 'information' && styles.activeTabText]}>
-                Information
-              </Text>
+              <Image style={styles.backIcon} source={require("../../assets/icons/back2.png")}/>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, selectedTab === 'products' && styles.activeTab]}
-              onPress={() => setSelectedTab('products')}
+            
+            <View style={styles.avatarContainer}>
+              <Image
+                source={
+                  userData.avatarURL
+                    ? { uri: userData.avatarURL }
+                    : require("../../assets/icons/profile-picture.png")
+                }
+                style={styles.avatar}
+              />
+            </View>
+          </ImageBackground>
+        </View>
+
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'information' && styles.activeTab]}
+            onPress={() => setSelectedTab('information')}
+          >
+            <Text style={[styles.tabText, selectedTab === 'information' && styles.activeTabText]}>
+              Information
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'products' && styles.activeTab]}
+            onPress={() => setSelectedTab('products')}
+          >
+            <Text style={[styles.tabText, selectedTab === 'products' && styles.activeTabText]}>
+              Products
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.content}>
+          {selectedTab === 'information' && (
+            <ScrollView 
+              style={styles.infoContent}
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={[styles.tabText, selectedTab === 'products' && styles.activeTabText]}>
-                Products
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Content */}
-          <View style={styles.content}>
-            {selectedTab === 'information' && (
-              <View style={styles.infoContent}>
-                <View style={{width: width, flexDirection: "column", justifyContent: "center", alignItems: "center", paddingHorizontal: 10}}>
-                  <View style={{width: width, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 10, padding: 5, borderTopWidth: 5, borderColor: "white"}}>
-                    <Text style={styles.title}>User Information</Text>
+              <View style={styles.infoContainer}>
+                <View style={styles.infoCard}>
+                  <Text style={styles.cardTitle}>👤 Basic Information</Text>
+        
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>Full Name:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.fullName)}
+                    </Text>
                   </View>
-
-                  {/* Basic Information Card */}
-                  <View style={styles.infoCard}>
-                    <Text style={styles.cardTitle}>👤 Basic Information</Text>
-          
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>Full Name:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.fullName)}
-                      </Text>
-                    </View>
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>Email:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.email)}
-                      </Text>
-                    </View>
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>Phone:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.phone)}
-                      </Text>
-                    </View>
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>Email:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.email)}
+                    </Text>
                   </View>
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>Phone:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.phone)}
+                    </Text>
+                  </View>
+                </View>
 
-                  {/* Address Information Card */}
-                  {(userData.address?.street || userData.address?.province || userData.address?.district || userData.address?.ward) && (
-                    <View style={styles.addressCard}>
-                      <Text style={styles.cardTitle}>📍 Address Information</Text>
-          
-                      {userData.address.street && (
-                        <View style={styles.infoSection}>
-                          <Text style={styles.infoLabel}>Street:</Text>
-                          <Text style={styles.infoValue}>
-                            {displayValue(userData.address.street)}
-                          </Text>
-                        </View>
-                      )}
-                      {userData.address.ward && (
-                        <View style={styles.infoSection}>
-                          <Text style={styles.infoLabel}>Ward:</Text>
-                          <Text style={styles.infoValue}>
-                            {displayValue(userData.address.ward)}
-                          </Text>
-                        </View>
-                      )}
-                      {userData.address.district && (
-                        <View style={styles.infoSection}>
-                          <Text style={styles.infoLabel}>District:</Text>
-                          <Text style={styles.infoValue}>
-                            {displayValue(userData.address.district)}
-                          </Text>
-                        </View>
-                      )}
-                      {userData.address.province && (
-                        <View style={styles.infoSection}>
-                          <Text style={styles.infoLabel}>Province:</Text>
-                          <Text style={styles.infoValue}>
-                            {displayValue(userData.address.province)}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {/* Full Address Summary */}
-                      <View style={styles.fullAddressSection}>
-                        <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
-                        <Text style={styles.fullAddressText}>
-                          {getCompleteAddress()}
+                {(userData.address?.street || userData.address?.province || userData.address?.district || userData.address?.ward) && (
+                  <View style={styles.addressCard}>
+                    <Text style={styles.cardTitle}>📍 Address Information</Text>
+        
+                    {userData.address.street && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoLabel}>Street:</Text>
+                        <Text style={styles.infoValue}>
+                          {displayValue(userData.address.street)}
                         </Text>
                       </View>
+                    )}
+                    {userData.address.ward && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoLabel}>Ward:</Text>
+                        <Text style={styles.infoValue}>
+                          {displayValue(userData.address.ward)}
+                        </Text>
+                      </View>
+                    )}
+                    {userData.address.district && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoLabel}>District:</Text>
+                        <Text style={styles.infoValue}>
+                          {displayValue(userData.address.district)}
+                        </Text>
+                      </View>
+                    )}
+                    {userData.address.province && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoLabel}>Province:</Text>
+                        <Text style={styles.infoValue}>
+                          {displayValue(userData.address.province)}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.fullAddressSection}>
+                      <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
+                      <Text style={styles.fullAddressText}>
+                        {getCompleteAddress()}
+                      </Text>
                     </View>
-                  )}
+                  </View>
+                )}
 
-                  {/* Show message if no address data */}
-                  {!(userData.address?.street || userData.address?.province) && (
-                    <View style={styles.noDataCard}>
-                      <Text style={styles.noDataText}>📍 No address information added yet</Text>
-                    </View>
-                  )}
-                </View>
+                {!(userData.address?.street || userData.address?.province) && (
+                  <View style={styles.noDataCard}>
+                    <Text style={styles.noDataText}>📍 No address information added yet</Text>
+                  </View>
+                )}
               </View>
-            )}
-            
-            {selectedTab === 'products' && (
+            </ScrollView>
+          )}
+          
+          {selectedTab === 'products' && (
+            <View style={styles.productsContent}>
               <ProductFeed 
                 mode="user"
                 userId={userId}
                 isOwnProfile={false}
               />
-            )}
-          </View>
+            </View>
+          )}
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -273,14 +261,7 @@ const PublicProfile: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: width,
-    flexDirection: "column",
-    alignItems: "center",
     backgroundColor: "#ffffffff"
-  },
-  scrollContainer: {
-    flex: 1,
-    width: width,
   },
   centerContainer: {
     flex: 1,
@@ -288,6 +269,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
     padding: 20,
+  },
+  headerBackground: {
+    width: width,
   },
   backButtonContainer: {
     position: 'absolute',
@@ -307,10 +291,23 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   backIcon: {
-    fontSize: 24,
+    width:20,
+    height:20,
     color: '#333',
-    fontWeight: 'bold',
-    marginTop: -2,
+    marginRight:2
+  },
+  avatarContainer: {
+    justifyContent: "center", 
+    alignItems: "center", 
+    paddingVertical: 10,
+    paddingTop: 50,
+  },
+  avatar: {
+    width: width * 0.35,
+    height: width * 0.35,
+    borderRadius: 100,
+    borderWidth: 5,
+    borderColor: "#D4A017",
   },
   backButton: {
     backgroundColor: '#00A86B',
@@ -329,7 +326,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e5ea',
-    width: width,
   },
   tab: {
     flex: 1,
@@ -350,34 +346,34 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    width: width,
   },
   infoContent: {
     flex: 1,
+  },
+  productsContent: {
+    flex: 1,
+  },
+  infoContainer: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingBottom: 20,
+  },
+  titleContainer: {
     width: width,
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    alignItems: "center", 
+    paddingHorizontal: 10, 
+    padding: 5, 
+    borderTopWidth: 5, 
+    borderColor: "white"
   },
   title: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#333",
   },
-  ratingcolumn: {
-    flexDirection: "column",
-    marginVertical: 5,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  ratingicon: {
-    width: width * 0.05,
-    height: width * 0.05,    
-  },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#333',
-    marginTop: 2,
-  },
-  // Card Styles
   infoCard: {
     width: "95%",
     marginVertical: 10,

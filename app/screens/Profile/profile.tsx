@@ -5,21 +5,19 @@ import { useAuth } from "../../../services/Auth/AuthContext";
 import Header from "../../components/header_for_detail";
 import PersonalInfo from "../../components/PersonalInfo";
 import ProductFeed from "../../components/ProductFeed";
+
 const {height,width} = Dimensions.get("window");
 
 export default function Profile(){
     const { user } = useAuth(); 
     const [selectedTab, setSelectedTab] = React.useState("Information");
-        const tabColors:any= {
+    const tabColors:any= {
         Information:"#e4f6efff", 
         Product:"#e3f4deff", 
         History:"#f8f8e1ff"
     };
 
-
     return(
-
-        
         <SafeAreaView style={styles.container} edges={['top']}>
             <Header title="User's Profile"/>
             <View style={[styles.menubar,  {backgroundColor: tabColors[selectedTab] }]}>
@@ -38,16 +36,19 @@ export default function Profile(){
                     History
                     </Text>
                 </TouchableOpacity>                
-                </View>
-                    <View style={[styles.contentBox,  {backgroundColor: tabColors[selectedTab] }]}>
-                    {selectedTab === "Information" && <PersonalInfo/>}
-                    {selectedTab === "Product" && (<ProductFeed mode="user" userId={user?.uid} isOwnProfile={true}/>)}
-                    {selectedTab === "History" && <Text>You haven't buy any product!</Text>}
+            </View>
+            <View style={[styles.contentBox,  {backgroundColor: tabColors[selectedTab] }]}>
+                {selectedTab === "Information" && <PersonalInfo/>}
+                {selectedTab === "Product" && (
+                    <View style={styles.productFeedContainer}>
+                        <ProductFeed mode="user" userId={user?.uid} isOwnProfile={true}/>
                     </View>
+                )}
+                {selectedTab === "History" && <Text>You haven't buy any product!</Text>}
+            </View>
         </SafeAreaView>
     );
 }
-
 
 const styles = StyleSheet.create({
     container:{
@@ -71,11 +72,14 @@ const styles = StyleSheet.create({
         width: width,
         marginVertical:5,
         backgroundColor: "white", 
-        alignItems: "center",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 3,
         elevation: 3
-  }
+    },
+    productFeedContainer: {
+        flex: 1,
+        width: '100%',
+    }
 });
