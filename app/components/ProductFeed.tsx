@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, limit, orderBy, query, startAfter, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -33,7 +34,6 @@ interface Product {
   condition?: string;
   createdAt?: any;
   sellerId: string;
-  // Auction specific fields
   auctionInfo?: {
     currentBid: number;
     startPrice: number;
@@ -73,8 +73,8 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
+  const params = useLocalSearchParams();
 
-  // Handle external data
   useEffect(() => {
     if (isExternalData && externalProducts) {
       setProducts(externalProducts);
@@ -83,15 +83,23 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
     }
   }, [externalProducts, isExternalData]);
 
-  // Load auction products - FIXED: Correct data mapping
+  useEffect(() => {
+    if (!isExternalData) {
+      loadProducts();
+    }
+  }, [productType, mode, userId]);
+
+  useEffect(() => {
+    if (params.refreshAuction === 'true' && productType === 'auction') {
+      loadProducts(true);
+    }
+  }, [params.refreshAuction]);
+
   const loadAuctionProducts = useCallback(async (filters: any = {}) => {
     try {
-      
       const result = await getAuctionProducts(filters);
       
       if (result.success) {
-        
-
         return result.products.map(auction => {
           return {
             id: auction.id,
@@ -107,7 +115,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
             condition: auction.condition,
             createdAt: auction.createdAt,
             sellerId: auction.sellerId,
-           
             auctionInfo: {
               currentBid: auction.currentBid, 
               startPrice: auction.startPrice, 
@@ -125,7 +132,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         throw new Error(result.error || 'Failed to load auctions');
       }
     } catch (error) {
-      console.error('💥 Error loading auction products:', error);
+      console.error('Error loading auction products:', error);
       throw error;
     }
   }, []);
@@ -165,7 +172,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         } as Product);
       });
 
-
       if (!isLoadMore) {
         setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
       }
@@ -174,11 +180,10 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
 
       return newProducts;
     } catch (error) {
-      console.error('💥 Error loading normal products:', error);
+      console.error('Error loading normal products:', error);
       throw error;
     }
   }, [mode, userId, lastVisible]);
-
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     if (isExternalData) {
@@ -195,7 +200,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       let productsData: Product[] = [];
 
       if (productType === 'auction') {
-
         let filters: any = { status: 'active' };
 
         if (mode === 'user' && userId) {
@@ -220,14 +224,13 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       }
 
     } catch (error) {
-      console.error('💥 Error loading products:', error);
+      console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [mode, userId, isExternalData, productType, loadAuctionProducts, loadNormalProducts]);
-
 
   const loadMore = async () => {
     if (!hasMore || loading || isExternalData || productType === 'auction') {
@@ -245,26 +248,17 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         setLastVisible(newProducts[newProducts.length - 1]);
       }
     } catch (error) {
-      console.error('💥 Error loading more products:', error);
+      console.error('Error loading more products:', error);
     } finally {
       setLoading(false);
     }
   };
-
-
-  useEffect(() => {
-    if (!isExternalData) {
-      loadProducts();
-    }
-  }, [loadProducts, isExternalData]);
-
 
   const handleRefresh = () => {
     if (!isExternalData) {
       loadProducts(true);
     }
   };
-
 
   const handleProductDeleted = () => {
     onProductDeleted?.();
@@ -282,7 +276,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       </View>
     );
   }
-
 
   if (products.length === 0) {
     return (

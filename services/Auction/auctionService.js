@@ -187,14 +187,51 @@ export const getAuctionProductById = async (productId) => {
   }
 };
 
-export const updateAuctionProduct = async (productId, updateData) => {
+export const updateAuctionProduct = async (productId, productData, auctionSettings, existingImages) => {
   try {
+    const uploadedImages = [];
+    
+    for (const imageUri of productData.images) {
+      if (imageUri.startsWith('http')) {
+        uploadedImages.push(imageUri);
+      } else {
+        const uploadResult = await uploadToCloudinary(imageUri, 'auctions');
+        if (uploadResult.success && uploadResult.url) {
+          uploadedImages.push(uploadResult.url);
+        } else {
+          throw new Error(uploadResult.error || 'Image upload failed');
+        }
+      }
+    }
+
+    let videoUrl = productData.video;
+    if (productData.video && !productData.video.startsWith('http')) {
+      const videoResult = await uploadVideoToCloudinary(productData.video, 'auction_videos');
+      if (videoResult.success && videoResult.url) {
+        videoUrl = videoResult.url;
+      }
+    }
+
+    const updateData = {
+      title: productData.title.trim(),
+      description: productData.description.trim(),
+      startPrice: parseFloat(productData.price),
+      currentBid: parseFloat(productData.price),
+      condition: productData.condition,
+      category: productData.category,
+      images: uploadedImages,
+      video: videoUrl,
+      address: productData.address,
+      'auctionInfo.startTime': auctionSettings.startTime,
+      'auctionInfo.endTime': auctionSettings.endTime,
+      'auctionInfo.bidIncrement': parseFloat(auctionSettings.bidIncrement),
+      'auctionInfo.buyNowPrice': auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null,
+      updatedAt: serverTimestamp()
+    };
+
     const docRef = doc(db, 'auction_products', productId);
     
-    await updateDoc(docRef, {
-      ...updateData,
-      updatedAt: serverTimestamp()
-    });
+    await updateDoc(docRef, updateData);
     
     return {
       success: true,
@@ -202,6 +239,7 @@ export const updateAuctionProduct = async (productId, updateData) => {
     };
     
   } catch (error) {
+    console.error('Error updating auction product:', error);
     return {
       success: false,
       error: error.message
@@ -219,6 +257,7 @@ export const deleteAuctionProduct = async (productId) => {
     };
     
   } catch (error) {
+    console.error('Error deleting auction product:', error);
     return {
       success: false,
       error: error.message
@@ -242,66 +281,57 @@ export const placeBid = async (productId, bidAmount, userId) => {
 
     const updateData = {
       currentBid: bidAmount,
-      auctionInfo: {
-        ...auctionInfo,
-        currentBid: bidAmount,
-        bidCount: auctionInfo.bidCount + 1,
-        highestBidder: userId
-      }
+      'auctionInfo.highestBidder': userId,
+      'auctionInfo.bidCount': (auctionInfo.bidCount || 0) + 1,
+      updatedAt: serverTimestamp()
     };
 
-    const result = await updateAuctionProduct(productId, updateData);
-    return result;
-  } catch (error) {
-    throw new Error(`Failed to place bid: ${error.message}`);
-  }
-};
-
-export const updateAuctionStatus = async (productId, status) => {
-  try {
-    const updateData = {
-      'auctionInfo.status': status
-    };
-
-    const result = await updateAuctionProduct(productId, updateData);
-    return result;
-  } catch (error) {
-    throw new Error(`Failed to update auction status: ${error.message}`);
-  }
-};
-
-export const getActiveAuctions = async () => {
-  try {
-    const filters = {
-      status: 'active'
-    };
-    
-    const result = await getAuctionProducts(filters);
-    return result;
-  } catch (error) {
-    throw new Error(`Failed to get active auctions: ${error.message}`);
-  }
-};
-
-export const getExpiredAuctions = async () => {
-  try {
-    const now = new Date();
-    const allAuctions = await getAuctionProducts();
-    
-    if (!allAuctions.success) {
-      return allAuctions;
-    }
-
-    const expiredAuctions = allAuctions.products.filter(product => 
-      new Date(product.auctionInfo.endTime) < now
-    );
+    const docRef = doc(db, 'auction_products', productId);
+    await updateDoc(docRef, updateData);
 
     return {
       success: true,
-      products: expiredAuctions,
-      total: expiredAuctions.length
+      message: 'Bid placed successfully'
     };
+
   } catch (error) {
-    throw new Error(`Failed to get expired auctions: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const getAuctionProductsByUser = async (userId) => {
+  try {
+    const auctionsQuery = query(
+      collection(db, 'auction_products'),
+      where('sellerId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(auctionsQuery);
+    const products = [];
+    
+    querySnapshot.forEach((doc) => {
+      products.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    return {
+      success: true,
+      products,
+      total: products.length
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      products: [],
+      total: 0
+    };
   }
 };

@@ -70,7 +70,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     if (timestamp.seconds && timestamp.nanoseconds !== undefined) {
       return new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
     }
-  
+
     if (timestamp instanceof Date) {
       return timestamp;
     }
@@ -123,7 +123,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
             setTimeRemaining(`${minutes}m`);
           }
         } else {
-
           const hours = Math.floor(diff / (1000 * 60 * 60));
           const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
           
@@ -149,7 +148,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const handleCardPress = () => {
     if (isAuction) {
       router.push({
-        pathname: '/screens/Products/product_detail',
+        pathname: '/screens/Auction/auction_detail',
         params: { id: product.id }
       });
     } else {
@@ -162,7 +161,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleEdit = () => {
     if (isAuction) {
-     
+      router.push(`/screens/Auction/edit_auction_product?id=${product.id}`);
     } else {
       router.push(`/screens/Products/edit_product?productId=${product.id}`);
     }
@@ -298,7 +297,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
         
         <View style={styles.divider} />
         
-        {/* Price Section */}
         <View style={styles.priceSection}>
           {isAuction && product.auctionInfo ? (
             <View style={styles.auctionPriceSection}>
@@ -317,7 +315,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </View>
 
-        {/* Location */}
         <View style={styles.locationContainer}>
           <Text style={styles.location}>
             📍 {getLocationText()}
@@ -329,7 +326,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
             {getConditionDisplay()}
           </Text>
           
-          {/* View count only */}
           <View style={styles.engagement}>
             <View style={styles.engagementItem}>
               <Text style={styles.engagementIcon}>👁️</Text>
@@ -338,7 +334,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </View>
         </View>
 
-        {/* Edit/Delete Buttons */}
         {mode === 'profile' && isOwnProfile && (
           <View style={styles.actionRow}>
             <TouchableOpacity 

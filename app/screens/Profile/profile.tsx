@@ -1,3 +1,4 @@
+import { useFocusEffect } from "@react-navigation/native";
 import React from "react";
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,6 +12,15 @@ const {height,width} = Dimensions.get("window");
 export default function Profile(){
     const { user } = useAuth(); 
     const [selectedTab, setSelectedTab] = React.useState("Information");
+    const [productSubTab, setProductSubTab] = React.useState("Products");
+    const [refreshKey, setRefreshKey] = React.useState(0);
+    
+    useFocusEffect(
+        React.useCallback(() => {
+            setRefreshKey(prev => prev + 1);
+        }, [])
+    );
+
     const tabColors:any= {
         Information:"#e4f6efff", 
         Product:"#e3f4deff", 
@@ -28,7 +38,7 @@ export default function Profile(){
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setSelectedTab("Product")}>
                     <Text style={{ fontWeight: selectedTab === "Product" ? "bold" : "normal" }}>
-                    Product
+                    Products
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setSelectedTab("History")}>
@@ -40,8 +50,58 @@ export default function Profile(){
             <View style={[styles.contentBox,  {backgroundColor: tabColors[selectedTab] }]}>
                 {selectedTab === "Information" && <PersonalInfo/>}
                 {selectedTab === "Product" && (
-                    <View style={styles.productFeedContainer}>
-                        <ProductFeed mode="user" userId={user?.uid} isOwnProfile={true}/>
+                    <View style={styles.productContainer}>
+                        <View style={styles.productSubTabBar}>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.subTabButton, 
+                                    productSubTab === "Products" && styles.activeSubTab
+                                ]} 
+                                onPress={() => setProductSubTab("Products")}
+                            >
+                                <Text style={[
+                                    styles.subTabText,
+                                    productSubTab === "Products" && styles.activeSubTabText
+                                ]}>
+                                    Normal
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.subTabButton, 
+                                    productSubTab === "Auction" && styles.activeSubTab
+                                ]} 
+                                onPress={() => setProductSubTab("Auction")}
+                            >
+                                <Text style={[
+                                    styles.subTabText,
+                                    productSubTab === "Auction" && styles.activeSubTabText
+                                ]}>
+                                    Auction
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.productFeedContainer}>
+                            {productSubTab === "Products" && (
+                                <ProductFeed 
+                                    key={`normal-${refreshKey}`}
+                                    mode="user" 
+                                    userId={user?.uid} 
+                                    isOwnProfile={true}
+                                    productType="normal"
+                                />
+                            )}
+                            {productSubTab === "Auction" && (
+                                <ProductFeed 
+                                    key={`auction-${refreshKey}`}
+                                    mode="user" 
+                                    userId={user?.uid} 
+                                    isOwnProfile={true}
+                                    productType="auction" 
+                                />
+                            )}
+                        </View>
                     </View>
                 )}
                 {selectedTab === "History" && <Text>You haven't buy any product!</Text>}
@@ -77,6 +137,36 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
         elevation: 3
+    },
+    productContainer: {
+        flex: 1,
+        width: '100%',
+    },
+    productSubTabBar: {
+        flexDirection: 'row',
+        height: 40,
+        backgroundColor: '#f5f5f5',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+    },
+    subTabButton: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+    },
+    activeSubTab: {
+        borderBottomWidth: 2,
+        borderBottomColor: '#2cd53aff',
+        backgroundColor: '#e3f4deff',
+    },
+    subTabText: {
+        fontSize: 14,
+        color: '#666',
+    },
+    activeSubTabText: {
+        fontWeight: 'bold',
+        color: '#000000ff',
     },
     productFeedContainer: {
         flex: 1,
