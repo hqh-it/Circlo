@@ -2,21 +2,22 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuth } from "../../services/Auth/AuthContext";
 import { chatService } from "../../services/Chat/chatService";
 
 const { height, width } = Dimensions.get("window");
 
 interface AppFooterProps {
-  onTabChange?: (tab: 'normal' | 'auction') => void; // NEW: Callback for tab changes
-  currentTab?: 'normal' | 'auction'; // NEW: Current active tab
+  onTabChange?: (tab: 'normal' | 'auction') => void;
+  currentTab?: 'normal' | 'auction';
 }
 
 export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFooterProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showAddOptions, setShowAddOptions] = useState(false);
 
   const loadUnreadCount = async () => {
     try {
@@ -28,14 +29,12 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
     }
   };
 
-  // Load khi component mount
   useEffect(() => {
     if (user) {
       loadUnreadCount();
     }
   }, [user]);
 
-  // Load lại khi focus (khi quay lại từ chat screen)
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
@@ -44,29 +43,34 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
     }, [user])
   );
 
-  // NEW: Handle home button press
   const handleHomePress = () => {
     if (onTabChange) {
       onTabChange('normal');
     }
-    // Không cần navigate vì đang ở home, chỉ cần thay đổi state
   };
 
-  // NEW: Handle auction button press
   const handleAuctionPress = () => {
     if (onTabChange) {
       onTabChange('auction');
     }
-    // Không navigate đến auctionHome nữa, chỉ thay đổi content
   };
 
-  // NEW: Handle add product/auction based on current tab
   const handleAddPress = () => {
-    if (currentTab === 'normal') {
-      router.push('/screens/Products/add_product');
-    } else {
-      router.push('/screens/Auction/add_auction_product');
-    }
+    setShowAddOptions(true);
+  };
+
+  const handleNormalProduct = () => {
+    setShowAddOptions(false);
+    router.push('/screens/Products/add_product');
+  };
+
+  const handleAuctionProduct = () => {
+    setShowAddOptions(false);
+    router.push('/screens/Auction/add_auction_product');
+  };
+
+  const closeModal = () => {
+    setShowAddOptions(false);
   };
 
   return (
@@ -77,23 +81,21 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
         end={{ x: 1, y: 0 }}
         style={styles.gradient}
       >
-        {/* Home Button - Normal Products */}
         <TouchableOpacity onPress={handleHomePress}>
           <Image 
             style={[
               styles.icon, 
-              currentTab === 'normal' && styles.activeIcon // Highlight khi active
+              currentTab === 'normal' && styles.activeIcon
             ]} 
             source={require("../assets/icons/home.png")} 
           />
         </TouchableOpacity>
 
-        {/* Auction Button - Auction Products */}
         <TouchableOpacity onPress={handleAuctionPress}>
           <Image 
             style={[
               styles.icon, 
-              currentTab === 'auction' && styles.activeIcon // Highlight khi active
+              currentTab === 'auction' && styles.activeIcon
             ]} 
             source={require("../assets/icons/auction.png")} 
           />
@@ -101,12 +103,10 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
 
         <View style={{ width: width * 0.01 }} />
 
-        {/* Notification Button */}
         <TouchableOpacity>
           <Image style={styles.icon} source={require("../assets/icons/bell.png")} />
         </TouchableOpacity>
 
-        {/* Chat Button with Badge */}
         <TouchableOpacity onPress={() => router.push("/screens/Chat/chatListScreen")}>
           <View style={styles.chatIconContainer}>
             <Image style={styles.icon} source={require("../assets/icons/chat.png")} />
@@ -124,11 +124,42 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
       <View style={styles.under_main_button}>
         <TouchableOpacity 
           style={styles.main_button} 
-          onPress={handleAddPress} // NEW: Dynamic add based on current tab
+          onPress={handleAddPress}
         >
           <Image style={styles.icon} source={require("../assets/icons/flus.png")} />
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showAddOptions}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={closeModal}
+        >
+          <View style={styles.modalContent}>
+            <TouchableOpacity 
+              style={styles.optionButton} 
+              onPress={handleNormalProduct}
+            >
+              <Text style={styles.optionText}>Normal Product</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.separator} />
+            
+            <TouchableOpacity 
+              style={styles.optionButton} 
+              onPress={handleAuctionProduct}
+            >
+              <Text style={styles.optionText}>Auction Product</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -155,10 +186,9 @@ const styles = StyleSheet.create({
     margin: height * 0.01,
     tintColor: "white",
   },
-  // NEW: Active icon style
   activeIcon: {
-    tintColor: '#FFD700', // Màu vàng cho icon active
-    transform: [{ scale: 1.1 }], // Phóng to nhẹ khi active
+    tintColor: '#FFD700',
+    transform: [{ scale: 1.1 }],
   },
   chatIconContainer: {
     position: 'relative',
@@ -199,5 +229,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "absolute",
     bottom: height * 0.035,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 0,
+    width: width * 0.7,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  optionButton: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  optionText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    width: '100%',
   },
 });

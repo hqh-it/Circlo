@@ -1,44 +1,53 @@
-// services/Chat/chatTypes.js
-
-/**
- * THÔNG TIN PHÒNG CHAT (CHANNEL)
- */
 export const ChannelType = {
-  DIRECT: 'direct',           // Chat 1-1 (người bán - người mua)
-  GROUP: 'group',             // Chat nhóm (sau này cho đấu giá)
-  AUCTION: 'auction'          // Phòng đấu giá (trong tương lai)
+  DIRECT: 'direct',          
+  GROUP: 'group',           
+  AUCTION: 'auction'         
 };
 
-/**
- * LOẠI TIN NHẮN (CHỈ CÒN TEXT)
- */
+
 export const MessageType = {
-  TEXT: 'text'               // Tin nhắn văn bản
+  TEXT: 'text',              
+  BID: 'bid',               
+  SYSTEM: 'system'            
 };
 
-/**
- * TRẠNG THÁI TIN NHẮN
- */
+
 export const MessageStatus = {
-  SENT: 'sent',               // Đã gửi
-  DELIVERED: 'delivered',     // Đã giao
-  READ: 'read'                // Đã xem
+  SENT: 'sent',               
+  DELIVERED: 'delivered',     
+  READ: 'read'               
 };
 
-/**
- * CẤU TRÚC PHÒNG CHAT
- */
+
+export const AuctionStatus = {
+  UPCOMING: 'upcoming',      
+  LIVE: 'live',               
+  ENDED: 'ended',           
+  CANCELLED: 'cancelled'      
+};
+
+
+export const SystemMessageType = {
+  HIGHEST_BIDDER: 'highest_bidder',
+  TIME_WARNING: 'time_warning',
+  AUCTION_STARTED: 'auction_started',
+  AUCTION_ENDED: 'auction_ended',
+  USER_JOINED: 'user_joined',
+  USER_LEFT: 'user_left'
+};
+
+
 export class ChatChannel {
   constructor(
     id = '',
-    participants = [],           // [userId1, userId2]
-    participantDetails = {},     // { userId1: {name, avatar}, userId2: {...} }
-    type = ChannelType.DIRECT,   // Loại phòng
-    lastMessage = '',            // Tin nhắn cuối cùng
-    lastMessageAt = null,        // Thời gian tin cuối
-    productId = '',              // ID sản phẩm (nếu có)
-    createdAt = null,            // Thời gian tạo phòng
-    updatedAt = null             // Thời gian cập nhật
+    participants = [],          
+    participantDetails = {},     
+    type = ChannelType.DIRECT,  
+    lastMessage = '',            
+    lastMessageAt = null,        
+    productId = '',             
+    createdAt = null,         
+    updatedAt = null          
   ) {
     this.id = id;
     this.participants = participants;
@@ -52,19 +61,52 @@ export class ChatChannel {
   }
 }
 
-/**
- * CẤU TRÚC TIN NHẮN (CHỈ TEXT)
- */
+export class AuctionChannel {
+  constructor(
+    id = '',
+    auctionId = '',              
+    participants = [],           
+    watchers = [],              
+    productInfo = null,          
+    type = ChannelType.AUCTION,  
+    currentBid = 0,              
+    bidCount = 0,                
+    highestBidder = '',          
+    participantCount = 0,       
+    isActive = true,             
+    createdBy = '',              
+    lastBidAt = null,           
+    createdAt = null,           
+    updatedAt = null            
+  ) {
+    this.id = id;
+    this.auctionId = auctionId;
+    this.participants = participants;
+    this.watchers = watchers;
+    this.productInfo = productInfo;
+    this.type = type;
+    this.currentBid = currentBid;
+    this.bidCount = bidCount;
+    this.highestBidder = highestBidder;
+    this.participantCount = participantCount;
+    this.isActive = isActive;
+    this.createdBy = createdBy;
+    this.lastBidAt = lastBidAt;
+    this.createdAt = createdAt;
+    this.updatedAt = updatedAt;
+  }
+}
+
 export class ChatMessage {
   constructor(
     id = '',
-    channelId = '',              // ID phòng chat
-    senderId = '',               // ID người gửi
-    content = '',                // Nội dung tin nhắn
-    type = MessageType.TEXT,     // Loại tin nhắn (luôn là text)
-    timestamp = null,            // Thời gian gửi
-    readBy = [],                 // Danh sách user đã đọc [userId1, userId2]
-    status = MessageStatus.SENT  // Trạng thái tin nhắn
+    channelId = '',             
+    senderId = '',               
+    content = '',              
+    type = MessageType.TEXT,     
+    timestamp = null,           
+    readBy = [],                 
+    status = MessageStatus.SENT 
   ) {
     this.id = id;
     this.channelId = channelId;
@@ -77,15 +119,61 @@ export class ChatMessage {
   }
 }
 
-/**
- * DỮ LIỆU TẠO PHÒNG CHAT MỚI
- */
+
+export class BidMessage {
+  constructor(
+    id = '',
+    channelId = '',            
+    senderId = '',             
+    bidAmount = 0,              
+    previousBid = 0,             
+    type = MessageType.BID,      
+    timestamp = null,            
+    readBy = [],                
+    status = MessageStatus.SENT 
+  ) {
+    this.id = id;
+    this.channelId = channelId;
+    this.senderId = senderId;
+    this.bidAmount = bidAmount;
+    this.previousBid = previousBid;
+    this.type = type;
+    this.timestamp = timestamp;
+    this.readBy = readBy;
+    this.status = status;
+  }
+}
+
+
+export class SystemMessage {
+  constructor(
+    id = '',
+    channelId = '',            
+    systemType = '',            
+    content = '',               
+    relatedData = {},            
+    type = MessageType.SYSTEM, 
+    timestamp = null,            
+    readBy = []                  
+  ) {
+    this.id = id;
+    this.channelId = channelId;
+    this.systemType = systemType;
+    this.content = content;
+    this.relatedData = relatedData;
+    this.type = type;
+    this.timestamp = timestamp;
+    this.readBy = readBy;
+  }
+}
+
+
 export class CreateChannelData {
   constructor(
-    participants = [],           // [userId1, userId2]
-    participantDetails = {},     // { userId1: {name, avatar}, userId2: {...} }
-    productId = '',              // ID sản phẩm liên quan
-    type = ChannelType.DIRECT    // Loại phòng
+    participants = [],          
+    participantDetails = {},    
+    productId = '',             
+    type = ChannelType.DIRECT  
   ) {
     this.participants = participants;
     this.participantDetails = participantDetails;
@@ -94,12 +182,58 @@ export class CreateChannelData {
   }
 }
 
-// Export tất cả
+export class CreateAuctionChannelData {
+  constructor(
+    auctionId = '',              
+    productInfo = null,         
+    createdBy = '',            
+    participants = [],          
+    startPrice = 0,             
+    bidIncrement = 0,           
+    startTime = null,           
+    endTime = null              
+  ) {
+    this.auctionId = auctionId;
+    this.productInfo = productInfo;
+    this.createdBy = createdBy;
+    this.participants = participants;
+    this.startPrice = startPrice;
+    this.bidIncrement = bidIncrement;
+    this.startTime = startTime;
+    this.endTime = endTime;
+  }
+}
+
+
+export class PlaceBidData {
+  constructor(
+    channelId = '',           
+    userId = '',               
+    bidAmount = 0,              
+    currentBid = 0,              
+    bidIncrement = 0            
+  ) {
+    this.channelId = channelId;
+    this.userId = userId;
+    this.bidAmount = bidAmount;
+    this.currentBid = currentBid;
+    this.bidIncrement = bidIncrement;
+  }
+}
+
+
 export default {
   ChannelType,
   MessageType,
   MessageStatus,
+  AuctionStatus,
+  SystemMessageType,
   ChatChannel,
+  AuctionChannel,
   ChatMessage,
-  CreateChannelData
+  BidMessage,
+  SystemMessage,
+  CreateChannelData,
+  CreateAuctionChannelData,
+  PlaceBidData
 };
