@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuctionProductById } from '../../../services/Auction/auctionService';
 import { useAuth } from '../../../services/Auth/AuthContext';
-import { chatService } from '../../../services/Chat/chatService';
+import { auctionChatService } from '../../../services/Chat/auctionChatService';
 import { formatPrice } from '../../../services/Product/productService';
 import CommentSection from '../../components/CommentSection';
 import FollowButton from '../../components/FollowButton';
@@ -200,60 +200,75 @@ const AuctionDetailScreen = () => {
     );
   };
 
-  const handleContactSeller = async () => {
+  const handleJoinAuction = async () => {
     if (!auction || !user) {
-      Alert.alert('Notification', 'Please log in to chat with seller');
+      Alert.alert('Notification', 'Please log in to join the auction');
       return;
     }
 
     try {
-      const createData = {
-        participants: [user.uid, auction.sellerId],
-        participantDetails: {
-          [user.uid]: {
-            name: user.displayName || 'You', 
-            avatar: user.photoURL || ''
-          },
-          [auction.sellerId]: {
-            name: auction.sellerName, 
-            avatar: auction.sellerAvatar || ''
-          }
-        },
-        productId: auction.id,
-        productInfo: {
-          id: auction.id,
-          title: auction.title,
-          price: auction.currentBid,
-          images: auction.images,
-          sellerId: auction.sellerId
-        },
-        type: 'direct'
-      };
-
-      const result = await chatService.createOrGetChannel(createData);
+      const channelResult = await auctionChatService.getAuctionChannelByAuctionId(auction.id);
       
-      if (result.success) {
-        const productInfo = {
-          id: auction.id,
-          title: auction.title,
-          price: auction.currentBid,
-          images: auction.images,
-          sellerId: auction.sellerId
+      let channelId;
+      
+      if (channelResult.success && channelResult.channel) {
+        channelId = channelResult.channel.id;
+        const joinResult = await auctionChatService.addUserToAuctionChannel(channelId, user.uid);
+        
+        if (!joinResult.success) {
+          Alert.alert('Error', 'Failed to join auction: ' + joinResult.error);
+          return;
+        }
+      } else {
+        const createData = {
+          auctionId: auction.id,
+          createdBy: user.uid,
+          participants: [user.uid, auction.sellerId],
+          productInfo: {
+            id: auction.id,
+            title: auction.title,
+            price: auction.currentBid,
+            images: auction.images,
+            sellerId: auction.sellerId,
+            bidIncrement: auction.auctionInfo.bidIncrement,
+            startTime: auction.auctionInfo.startTime,
+            endTime: auction.auctionInfo.endTime
+          },
+          startPrice: auction.startPrice
         };
 
-        router.push({
-          pathname: '../../screens/Chat/chatScreen',
-          params: {
-            channelId: result.channelId,
-            productData: JSON.stringify(productInfo) 
-          }
-        });
-      } else {
-        Alert.alert('Error', 'Cannot create chat room: ' + result.error);
+        const createResult = await auctionChatService.createAuctionChannel(createData);
+        
+        if (!createResult.success) {
+          Alert.alert('Error', 'Failed to create auction room: ' + createResult.error);
+          return;
+        }
+        
+        channelId = createResult.channelId;
       }
+
+      const productInfo = {
+        id: auction.id,
+        title: auction.title,
+        price: auction.currentBid,
+        images: auction.images,
+        sellerId: auction.sellerId,
+        bidIncrement: auction.auctionInfo.bidIncrement,
+        startTime: auction.auctionInfo.startTime,
+        endTime: auction.auctionInfo.endTime
+      };
+
+      router.push({
+        pathname: '../../screens/Chat/auctionChatScreen',
+        params: {
+          channelId: channelId,
+          productData: JSON.stringify(productInfo)
+        }
+      });
+
     } catch (error) {
-      console.error('Error creating chat room:', error);
-      Alert.alert('Error', 'Cannot start chat with seller');
+      console.error('Error joining auction:', error);
+      Alert.alert('Error', 'Cannot join auction room');
     }
   };
 
@@ -356,7 +371,6 @@ const AuctionDetailScreen = () => {
     <SafeAreaView style={styles.container}>
       <Header title="Auction Detail"/>
       
-      {/* Floating Countdown Banner */}
       {isCountdownVisible && (
         <View style={[styles.floatingCountdown, !isAuctionActive && styles.endedBanner]}>
           <Text style={styles.countdownText}>
@@ -371,7 +385,6 @@ const AuctionDetailScreen = () => {
         </View>
       )}
 
-      {/* Show Countdown Button when hidden */}
       {!isCountdownVisible && (
         <TouchableOpacity 
           style={styles.showCountdownButton}
@@ -427,13 +440,11 @@ const AuctionDetailScreen = () => {
 
         {renderVideoSection()}
 
-        {/* Auction Info Section */}
         <View style={styles.mainInfoSection}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>{auction.title || 'No Title'}</Text>
           </View>
 
-          {/* Condition and Category Tags - Moved up under title */}
           <View style={styles.tagsSection}>
             <View style={styles.tags}>
               <View style={styles.tag}>
@@ -445,7 +456,6 @@ const AuctionDetailScreen = () => {
             </View>
           </View>
 
-          {/* Simplified Auction Stats */}
           <View style={styles.auctionStats}>
             <View style={styles.priceRow}>
               <Text style={styles.startPriceLabel}>Start Price:</Text>
@@ -460,7 +470,6 @@ const AuctionDetailScreen = () => {
             )}
           </View>
 
-          {/* Auction Timeline */}
           <View style={styles.timelineSection}>
             <Text style={styles.sectionTitle}>⏰ Auction Timeline</Text>
             <View style={styles.timeline}>
@@ -476,7 +485,6 @@ const AuctionDetailScreen = () => {
           </View>
         </View>
 
-        {/* Description Section */}
         <View style={styles.descriptionSection}>
           <Text style={styles.sectionTitle}>📝 Description</Text>
           <View style={styles.descriptionBox}>
@@ -484,7 +492,6 @@ const AuctionDetailScreen = () => {
           </View>
         </View>
 
-        {/* Seller Information Section */}
         <View style={styles.sellerSection}>
           <Text style={styles.sectionTitle}>👤 Seller Information</Text>
           <View style={styles.sellerBox}>
@@ -498,7 +505,7 @@ const AuctionDetailScreen = () => {
               <View style={styles.sellerText}>
                 <Text style={styles.sellerName}>{auction.sellerName || 'Unknown Seller'}</Text>
               </View> 
-              <View style={styles.verticalDivider}></View>           
+              <View style={styles.verticalDivider}></View>            
               <View style={styles.followButtonWrapper}>
                 <FollowButton 
                   targetUserId={auction.sellerId}
@@ -512,7 +519,6 @@ const AuctionDetailScreen = () => {
           </View>
         </View>
 
-        {/* Location Section */}
         <View style={styles.locationSection}>
           <Text style={styles.sectionTitle}>📍 Location</Text>
           <View style={styles.locationBox}>
@@ -523,18 +529,16 @@ const AuctionDetailScreen = () => {
           </View>
         </View>
 
-        {/* Comments Section */}
         <CommentSection productId={auctionId}/>
       </ScrollView>
 
-      {/* Simplified Footer - Only Contact Seller and Buy Now */}
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={styles.contactButton}
-          onPress={handleContactSeller}
+          style={styles.joinAuctionButton}
+          onPress={handleJoinAuction}
         >
-          <Text style={styles.contactButtonText}>
-            💬 Contact Seller
+          <Text style={styles.joinAuctionButtonText}>
+            🏷️ Join Auction
           </Text>
         </TouchableOpacity>
         
@@ -588,8 +592,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  
-  // Floating Countdown Banner
   floatingCountdown: {
     position: 'absolute',
     top: 105,
@@ -645,8 +647,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  
-  // Media Section
   mediaSection: {
     backgroundColor: '#fff',
     marginBottom: 8,
@@ -706,8 +706,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-
-  // Video Section 
   videoSection: {
     backgroundColor: '#fff',
     padding: 16,
@@ -743,14 +741,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginBottom: 12,
   },
-
   mainInfoSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -780,8 +776,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     textAlign: 'center',
   },
-  
-  // Tags Section - Moved up
   tagsSection: {
     marginBottom: 16,
   },
@@ -804,8 +798,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#00A86B',
   },
-  
-  // Simplified Auction Stats
   auctionStats: {
     backgroundColor: '#f8f9fa',
     padding: 16,
@@ -840,8 +832,6 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     fontWeight: 'bold',
   },
-  
-  // Timeline
   timelineSection: {
     marginBottom: 8,
   },
@@ -868,8 +858,6 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
-  
-  // Description
   descriptionSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -894,8 +882,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#333',
   },
-
-  // Seller Section
   sellerSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -944,8 +930,6 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH * 0.15, 
     alignItems: 'center',
   },
-  
-  // Location
   locationSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -970,8 +954,6 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 22,
   },
-
-  // Footer - Simplified
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -989,19 +971,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  contactButton: {
+  joinAuctionButton: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1a365d',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#00A86B',
   },
-  contactButtonText: {
+  joinAuctionButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#00A86B',
+    color: '#fff',
   },
   buyNowButton: {
     flex: 1,

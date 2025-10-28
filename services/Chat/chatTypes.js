@@ -130,7 +130,8 @@ export class BidMessage {
     type = MessageType.BID,      
     timestamp = null,            
     readBy = [],                
-    status = MessageStatus.SENT 
+    status = MessageStatus.SENT,
+    senderName = ''
   ) {
     this.id = id;
     this.channelId = channelId;
@@ -141,6 +142,7 @@ export class BidMessage {
     this.timestamp = timestamp;
     this.readBy = readBy;
     this.status = status;
+    this.senderName = senderName;
   }
 }
 
