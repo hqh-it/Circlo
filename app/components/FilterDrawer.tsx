@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getProductsByFilter } from '../../services/Product/productService';
 import { fetchProvinces } from '../../services/User/address';
 import AddressPicker from '../components/AddressPicker';
 
@@ -21,6 +20,7 @@ interface FilterDrawerProps {
   visible: boolean;
   onClose: () => void;
   onApplyFilters: (filterResult: any) => void;
+  productType: 'normal' | 'auction';
 }
 
 interface Category {
@@ -66,7 +66,7 @@ const priceRanges: PriceRange[] = [
   { label: 'Over 5M', value: [5000000, null] }
 ];
 
-const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFilters }) => {
+const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFilters, productType }) => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [selectedSort, setSelectedSort] = useState<string>('');
@@ -165,29 +165,38 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFi
         maxPrice: priceRange[1] !== 20000000 ? priceRange[1] : undefined,
       };
 
-      // Remove undefined values
       Object.keys(filters).forEach(key => {
         if (filters[key] === undefined) {
           delete filters[key];
         }
       });
 
-      console.log('Sending filters to backend:', filters);
-
-      const result = await getProductsByFilter(filters);
+      let result;
+      
+      if (productType === 'normal') {
+        const { getProductsByFilter } = await import('../../services/Product/productService');
+        result = await getProductsByFilter(filters);
+      } else {
+        const { getAuctionProductsByFilter } = await import('../../services/Auction/auctionService');
+        result = await getAuctionProductsByFilter(filters);
+      }
       
       if (result.success) {
+        const productsWithType = result.products.map(p => ({ 
+          ...p, 
+          type: productType 
+        }));
+        
         onApplyFilters({
           filters: filters,
-          products: result.products,
+          products: productsWithType,
           total: result.total
         });
       } else {
         onApplyFilters({
           filters: filters,
           products: [],
-          total: 0,
-          error: result.error
+          total: 0
         });
       }
       
@@ -246,7 +255,7 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFi
           ]}
         >
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Filters</Text>
+            <Text style={styles.headerTitle}>Filters - {productType === 'normal' ? 'Products' : 'Auctions'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>

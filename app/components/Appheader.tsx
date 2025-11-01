@@ -1,52 +1,28 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import { Dimensions, Image, StyleSheet, TouchableOpacity, View } from "react-native";
-import FilterDrawer from './FilterDrawer';
 
 const {height, width}= Dimensions.get("window");
 
 interface AppheaderProps {
-    onApplyFilters?: (filterResult: any) => void;
+    onFilterPress: () => void;
 }
 
-export default function Appheader({ onApplyFilters }: AppheaderProps){
+export default function Appheader({ onFilterPress }: AppheaderProps){
     const router = useRouter();
-    const [isFilterVisible, setIsFilterVisible] = useState(false);
-
-    const handleMenuPress = () => {
-        setIsFilterVisible(true);
-    };
-
-    const handleCloseFilter = () => {
-        setIsFilterVisible(false);
-    };
-
-    const handleApplyFilters = (filterResult: any) => {
-        if (onApplyFilters) {
-            onApplyFilters(filterResult);
-        }
-    };
 
     return (
-        <>
-            <View style={styles.container}>
-                <TouchableOpacity onPress={handleMenuPress}>
-                    <Image style={styles.icon} source={require('../assets/icons/menu.png')} />
-                </TouchableOpacity>
-                
-                <Image style={styles.logo} source={require('../assets/images/logo.png')} />
-                
-                <TouchableOpacity onPress={() => router.push("/screens/Profile/profile")}>
-                    <Image style={styles.profile} source={require('../assets/icons/user.png')} />
-                </TouchableOpacity>
-            </View>
-
-            <FilterDrawer 
-                visible={isFilterVisible}
-                onClose={handleCloseFilter}
-                onApplyFilters={handleApplyFilters}
-            />
-        </>
+        <View style={styles.container}>
+            <TouchableOpacity onPress={onFilterPress}>
+                <Image style={styles.icon} source={require('../assets/icons/menu.png')} />
+            </TouchableOpacity>
+            
+            <Image style={styles.logo} source={require('../assets/images/logo.png')} />
+            
+            <TouchableOpacity onPress={() => router.push("/screens/Profile/profile")}>
+                <Image style={styles.profile} source={require('../assets/icons/user.png')} />
+            </TouchableOpacity>
+        </View>
     );
 }
 

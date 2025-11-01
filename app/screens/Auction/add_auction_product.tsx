@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createAuctionProduct } from '../../../services/Auction/auctionService';
 import { useAuth } from '../../../services/Auth/AuthContext';
+import { auctionChatService } from '../../../services/Chat/auctionChatService';
 import { loadUserData } from '../../../services/User/userService';
 import Header from "../../components/header_for_detail";
 import AddProduct from '../Products/add_product';
@@ -205,6 +206,37 @@ const AddAuctionProduct = () => {
     return endDateTime;
   };
 
+  const createAuctionChatChannel = async (productId: string) => {
+    try {
+      if (!user || !productData) return { success: false, error: 'Missing user or product data' };
+
+      const createChannelData = {
+        auctionId: productId,
+        productInfo: {
+          id: productId,
+          title: productData.title,
+          images: productData.images,
+          startPrice: parseFloat(productData.price),
+          sellerId: user.uid,
+          bidIncrement: parseFloat(auctionSettings.bidIncrement),
+          startTime: calculateEndTime(), // Using the calculated end time
+          endTime: calculateEndTime()
+        },
+        createdBy: user.uid,
+        participants: [user.uid],
+        startPrice: parseFloat(productData.price),
+        bidIncrement: parseFloat(auctionSettings.bidIncrement),
+        startTime: calculateEndTime(),
+        endTime: calculateEndTime()
+      };
+
+      const channelResult = await auctionChatService.createAuctionChannel(createChannelData);
+      return channelResult;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  };
+
   const handleAddProduct = async () => {
     if (!auctionSettings.startDate) {
       Alert.alert('Error', 'Please select start date');
@@ -264,6 +296,7 @@ const AddAuctionProduct = () => {
         buyNowPrice: auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null
       };
 
+      // Step 1: Tạo sản phẩm đấu giá
       const result = await createAuctionProduct(
         productData,
         auctionSettingsData,
@@ -271,8 +304,17 @@ const AddAuctionProduct = () => {
         userData
       );
 
-      if (result.success) {
-        Alert.alert('Success', 'Auction product created successfully!');
+      if (result.success && result.productId) {
+        // Step 2: Tạo kênh chat sau khi sản phẩm được tạo thành công
+        const channelResult = await createAuctionChatChannel(result.productId);
+
+        if (channelResult.success) {
+          Alert.alert('Success', 'Auction product and chat channel created successfully!');
+        } else {
+          Alert.alert('Success', 'Auction product created successfully, but chat channel creation failed.');
+        }
+
+        // Reset form
         setCurrentStep('add_product');
         setProductData(null);
         setFormData({

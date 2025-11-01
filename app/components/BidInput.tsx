@@ -34,10 +34,8 @@ const BidInput: React.FC<BidInputProps> = ({
   };
 
   const formatInputAmount = (text: string) => {
-    // Remove all non-digit characters
     const numericValue = text.replace(/\D/g, '');
-    
-    // Convert to number and format
+
     if (numericValue === '') {
       setDisplayAmount('');
       setBidAmount('');
@@ -166,7 +164,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8E8E8',
   },
   placeBidButton: {
-    backgroundColor: "#01332fff",
+    backgroundColor: "#028c80bb",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderRadius: 12,

@@ -6,6 +6,7 @@ import { Dimensions, StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ProductFeed from "../../../app/components/ProductFeed";
 import { auth, db } from "../../../firebaseConfig";
+import FilterDrawer from '../../components/FilterDrawer';
 import SearchBar from '../../components/SearchBar';
 
 const { height } = Dimensions.get('window');
@@ -17,7 +18,10 @@ function Homepage() {
     const [hasSearched, setHasSearched] = useState(false);
     const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
     const [hasFiltered, setHasFiltered] = useState(false);
-    const [productType, setProductType] = useState<'normal' | 'auction'>('normal'); // NEW: State for product type
+    const [productType, setProductType] = useState<'normal' | 'auction'>('normal');
+    const [searchTerm, setSearchTerm] = useState<string>('');
+    const [activeFilters, setActiveFilters] = useState<any>(null);
+    const [filterVisible, setFilterVisible] = useState(false);
 
     useEffect(() => {
         StatusBar.setBarStyle('light-content');
@@ -45,6 +49,7 @@ function Homepage() {
         setSearchResults(results);
         setHasSearched(true);
         setHasFiltered(false);
+        setActiveFilters(null);
     };
 
     const handleSearchStart = () => {
@@ -61,30 +66,64 @@ function Homepage() {
         setIsSearching(false);
         setFilteredProducts([]);
         setHasFiltered(false);
+        setSearchTerm('');
+        setActiveFilters(null);
     };
 
     const handleApplyFilters = (filterResult: any) => {
         setFilteredProducts(filterResult.products);
         setHasFiltered(true);
         setHasSearched(false);
+        setActiveFilters(filterResult.filters);
+        setSearchTerm('');
+        setFilterVisible(false);
+    };
+
+    const handleOpenFilter = () => {
+        setFilterVisible(true);
+    };
+
+    const handleCloseFilter = () => {
+        setFilterVisible(false);
     };
 
     const handleFocus = () => {};
 
     const handleBlur = () => {};
 
-    // NEW: Handle tab change from AppFooter
     const handleTabChange = (type: 'normal' | 'auction') => {
         setProductType(type);
-        // Clear any active search/filter when switching tabs
         handleClearSearch();
+    };
+
+    const getDisplayProducts = () => {
+        if (hasSearched) {
+            return searchResults;
+        } else if (hasFiltered) {
+            return filteredProducts;
+        }
+        return undefined;
+    };
+
+    const getSearchTerm = () => {
+        if (hasSearched && searchTerm) {
+            return searchTerm;
+        }
+        return undefined;
+    };
+
+    const getFilters = () => {
+        if (hasFiltered && activeFilters) {
+            return activeFilters;
+        }
+        return undefined;
     };
 
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Appheader onApplyFilters={handleApplyFilters} />
+                    <Appheader onFilterPress={handleOpenFilter} />
                 </View>
                 
                 <View style={styles.searchContainer}>
@@ -96,31 +135,34 @@ function Homepage() {
                         onClearSearch={handleClearSearch}
                         onFocus={handleFocus}
                         onBlur={handleBlur}
+                        productType={productType}
                     />
                 </View>
                 
                 <View style={styles.content}>
-                    {hasSearched || hasFiltered ? (
-                        <ProductFeed 
-                            mode="all"
-                            productType={productType} // NEW: Pass product type
-                            externalProducts={hasSearched ? searchResults : filteredProducts}
-                            isExternalData={true}
-                        />
-                    ) : (
-                        <ProductFeed 
-                            mode="all" 
-                            productType={productType} // NEW: Pass product type
-                        />
-                    )}
+                    <ProductFeed 
+                        mode="all"
+                        productType={productType}
+                        externalProducts={getDisplayProducts()}
+                        isExternalData={hasSearched || hasFiltered}
+                        searchTerm={getSearchTerm()}
+                        filters={getFilters()}
+                    />
                 </View>
                 
                 <View style={styles.footer}>
                     <Appfooter 
-                        onTabChange={handleTabChange} // NEW: Pass callback to AppFooter
-                        currentTab={productType} // NEW: Pass current tab
+                        onTabChange={handleTabChange}
+                        currentTab={productType}
                     />
                 </View>
+
+                <FilterDrawer
+                    visible={filterVisible}
+                    onClose={handleCloseFilter}
+                    onApplyFilters={handleApplyFilters}
+                    productType={productType}
+                />
             </View>
         </SafeAreaView>
     );

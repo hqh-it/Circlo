@@ -53,6 +53,7 @@ interface AddProductProps {
   showHeader?: boolean;
   initialData?: any;
   onFormDataChange?: (data: any) => void;
+  isEditMode?: boolean; // THÊM PROP NÀY
 }
 
 const AddProduct = ({ 
@@ -60,7 +61,8 @@ const AddProduct = ({
   isAuctionFlow = false, 
   showHeader = true,
   initialData,
-  onFormDataChange 
+  onFormDataChange,
+  isEditMode = false // MẶC ĐỊNH LÀ false
 }: AddProductProps) => {
   const { user } = useAuth();
   const [title, setTitle] = useState<string>(initialData?.title || '');
@@ -154,6 +156,36 @@ const AddProduct = ({
     loadUserAddress();
   }, [user]);
 
+  // QUAN TRỌNG: Xử lý initialData khi có địa chỉ từ sản phẩm cũ
+  useEffect(() => {
+    if (initialData?.address && isEditMode) {
+      console.log('Processing initial address data:', initialData.address);
+      
+      // Nếu địa chỉ có isAnotherAddress = true, xử lý địa chỉ tùy chỉnh
+      if (initialData.address.isAnotherAddress || initialData.address.useDefault === false) {
+        setUseDefaultAddress(false);
+        
+        // Set các giá trị địa chỉ tùy chỉnh
+        setCustomStreet(initialData.address.street || initialData.address.specificAddress || '');
+        setCustomProvince(initialData.address.provinceCode || '');
+        setCustomDistrict(initialData.address.districtCode || '');
+        setCustomWard(initialData.address.wardCode || '');
+        setCustomAddressFull(initialData.address.fullAddress || '');
+        setCustomAddressConfirmed(true);
+        
+        console.log('Set custom address:', {
+          street: initialData.address.street || initialData.address.specificAddress,
+          province: initialData.address.provinceCode,
+          district: initialData.address.districtCode,
+          ward: initialData.address.wardCode
+        });
+      } else {
+        // Sử dụng địa chỉ mặc định
+        setUseDefaultAddress(true);
+      }
+    }
+  }, [initialData, isEditMode]);
+
   useEffect(() => {
     if (onFormDataChange) {
       const formData = {
@@ -174,6 +206,7 @@ const AddProduct = ({
     if (useDefaultAddress) {
       return userAddress ? {
         useDefault: true,
+        isAnotherAddress: false,
         street: userAddress.street || '',
         province: userAddress.province || '',
         district: userAddress.district || '',
@@ -196,6 +229,10 @@ const AddProduct = ({
 
         return {
           useDefault: false,
+          isAnotherAddress: true,
+          recipientName: userData?.fullName || '',
+          phoneNumber: userData?.phoneNumber || '',
+          specificAddress: customStreet,
           street: customStreet,
           province: provinceName,
           district: districtName,
@@ -431,9 +468,13 @@ const AddProduct = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {showHeader && <Header title="Add Product" />}
+      {showHeader && (
+        <Header title={isEditMode ? "Edit Product" : "Add Product"} />
+      )}
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Product Information</Text>
+        <Text style={styles.sectionTitle}>
+          {isEditMode ? "Edit Product Information" : "Product Information"}
+        </Text>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Title *</Text>
@@ -702,7 +743,7 @@ const AddProduct = ({
             disabled={!isFormValid() || loading}
           >
             <Text style={styles.submitButtonText}>
-              {loading ? 'Creating Product...' : 'Add Product'}
+              {loading ? (isEditMode ? 'Updating Product...' : 'Creating Product...') : (isEditMode ? 'Update Product' : 'Add Product')}
             </Text>
           </TouchableOpacity>
         )}

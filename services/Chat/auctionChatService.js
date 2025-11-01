@@ -23,6 +23,7 @@ import {
   MessageStatus,
   MessageType
 } from './chatTypes';
+
 export const auctionChatService = {
 
   parseTimestamp: (timestamp) => {
@@ -500,8 +501,8 @@ export const auctionChatService = {
       return { success: false, error: error.message };
     }
   },
-  
-  async getUserInfo(userId) {
+
+  getUserInfo: async (userId) => {
     try {
       const userData = await loadUserData({ uid: userId });
       if (userData) {
@@ -526,15 +527,66 @@ export const auctionChatService = {
     }
   },
 
-  async getMultipleUsersInfo(userIds) {
+  getMultipleUsersInfo: async (userIds) => {
     try {
-      const userPromises = userIds.map(id => this.getUserInfo(id));
+      const userPromises = userIds.map(id => auctionChatService.getUserInfo(id));
       return await Promise.all(userPromises);
     } catch (error) {
       console.error('Error getting multiple users info:', error);
       return [];
     }
+  },
+
+  updateAuctionChannel: async (auctionId, updateData) => {
+  try {
+    console.log('updateAuctionChannel called with:', { auctionId, updateData });
+    
+    const channelsQuery = query(
+      collection(db, 'auction_channels'),
+      where('auctionId', '==', auctionId)
+    );
+    
+    const querySnapshot = await getDocs(channelsQuery);
+    console.log('Found channels:', querySnapshot.size);
+    
+    if (querySnapshot.empty) {
+      console.log('No channel found for auctionId:', auctionId);
+      return { success: false, error: 'Auction channel not found' };
+    }
+
+    const updatePromises = querySnapshot.docs.map(async (channelDoc) => {
+      const channelRef = doc(db, 'auction_channels', channelDoc.id);
+      console.log('Updating channel:', channelDoc.id, 'with data:', updateData);
+      
+      // SỬA QUAN TRỌNG: Sử dụng serverTimestamp() và xử lý nested fields
+      const firestoreUpdateData = {
+        ...updateData,
+        updatedAt: serverTimestamp() // Sử dụng serverTimestamp thay vì new Date()
+      };
+      
+      // Xử lý nested fields nếu cần
+      if (updateData.productInfo) {
+        // Đảm bảo productInfo được cập nhật đúng cách
+        firestoreUpdateData.productInfo = {
+          ...updateData.productInfo
+        };
+      }
+      
+      await updateDoc(channelRef, firestoreUpdateData);
+      
+      console.log('Channel updated successfully:', channelDoc.id);
+    });
+
+    await Promise.all(updatePromises);
+    
+    console.log('All channels updated successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating auction channel:', error);
+    return { success: false, error: error.message };
   }
+},
 
 };
+
 export default auctionChatService;

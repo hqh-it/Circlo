@@ -335,3 +335,121 @@ export const getAuctionProductsByUser = async (userId) => {
     };
   }
 };
+
+export const searchAuctionProducts = async (searchTerm, filters = {}) => {
+  try {
+    console.log('Searching auction products with term:', searchTerm);
+    
+    // Lấy tất cả sản phẩm đấu giá với bộ lọc cơ bản
+    const result = await getAuctionProducts(filters);
+    
+    if (!result.success) {
+      return result;
+    }
+    
+    // Lọc client-side theo từ khóa tìm kiếm
+    const searchResults = result.products.filter(product => {
+      const searchableText = (
+        product.title?.toLowerCase() + 
+        ' ' + 
+        product.description?.toLowerCase() +
+        ' ' +
+        product.category?.toLowerCase()
+      );
+      
+      return searchableText.includes(searchTerm.toLowerCase());
+    });
+    
+    return {
+      success: true,
+      products: searchResults,
+      total: searchResults.length
+    };
+    
+  } catch (error) {
+    console.error('Error searching auction products:', error);
+    return {
+      success: false,
+      error: error.message,
+      products: [],
+      total: 0
+    };
+  }
+};
+
+export const getAuctionProductsByFilter = async (filters = {}) => {
+  try {
+    console.log('Getting auction products with filters:', filters);
+    
+    let auctionsQuery = collection(db, 'auction_products');
+    const queryConstraints = [where('status', '==', 'active')];
+    
+    // Áp dụng các bộ lọc tương tự productService
+    if (filters.categories && filters.categories.length > 0) {
+      queryConstraints.push(where('category', 'in', filters.categories));
+    }
+    
+    if (filters.conditions && filters.conditions.length > 0) {
+      queryConstraints.push(where('condition', 'in', filters.conditions));
+    }
+    
+    // Lọc theo giá hiện tại (currentBid) thay vì price
+    if (filters.minPrice !== undefined && filters.minPrice !== null) {
+      queryConstraints.push(where('currentBid', '>=', parseFloat(filters.minPrice)));
+    }
+    if (filters.maxPrice !== undefined && filters.maxPrice !== null) {
+      queryConstraints.push(where('currentBid', '<=', parseFloat(filters.maxPrice)));
+    }
+    
+    if (filters.location) {
+      queryConstraints.push(where('address.provinceCode', '==', filters.location));
+    }
+    
+    // Sắp xếp
+    if (filters.sort) {
+      switch (filters.sort) {
+        case 'price_low_high':
+          queryConstraints.push(orderBy('currentBid', 'asc'));
+          break;
+        case 'price_high_low':
+          queryConstraints.push(orderBy('currentBid', 'desc'));
+          break;
+        default:
+          queryConstraints.push(orderBy('createdAt', 'desc'));
+      }
+    } else {
+      queryConstraints.push(orderBy('createdAt', 'desc'));
+    }
+    
+    console.log('Auction query constraints:', queryConstraints.length);
+    
+    const q = query(auctionsQuery, ...queryConstraints);
+    const querySnapshot = await getDocs(q);
+    
+    const products = [];
+    querySnapshot.forEach((doc) => {
+      const auctionData = doc.data();
+      products.push({
+        id: doc.id,
+        ...auctionData
+      });
+    });
+    
+    console.log(`Found ${products.length} auction products with filters`);
+    
+    return {
+      success: true,
+      products,
+      total: products.length
+    };
+    
+  } catch (error) {
+    console.error('Error getting auction products with filters:', error);
+    return {
+      success: false,
+      error: error.message,
+      products: [],
+      total: 0
+    };
+  }
+};

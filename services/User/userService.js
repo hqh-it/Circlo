@@ -120,3 +120,144 @@ export async function saveUserProfile(user, userData, addressData) {
       console.error("Error initializing user follow data:", error);
     }
   };
+
+  export const addBankAccount = async (userId, bankAccount) => {
+  try {
+    const userRef = doc(db, "users", userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error("User not found");
+    }
+
+    const userData = userDoc.data();
+    const currentBankAccounts = userData.bankAccounts || [];
+    
+    // Set as default if first account
+    const isFirstAccount = currentBankAccounts.length === 0;
+    const newBankAccount = {
+      ...bankAccount,
+      id: Date.now().toString(), // Simple ID generation
+      isDefault: isFirstAccount
+    };
+
+    const updatedBankAccounts = [...currentBankAccounts, newBankAccount];
+
+    await updateDoc(userRef, {
+      bankAccounts: updatedBankAccounts,
+      updatedAt: new Date()
+    });
+
+    return { 
+      success: true, 
+      message: "Bank account added successfully!",
+      bankAccount: newBankAccount
+    };
+  } catch (error) {
+    console.error("Error adding bank account:", error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
+};
+
+// Update bank account
+export const updateBankAccount = async (userId, bankAccountId, updates) => {
+  try {
+    const userRef = doc(db, "users", userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error("User not found");
+    }
+
+    const userData = userDoc.data();
+    const bankAccounts = userData.bankAccounts || [];
+    
+    const updatedBankAccounts = bankAccounts.map(account => 
+      account.id === bankAccountId 
+        ? { ...account, ...updates, updatedAt: new Date() }
+        : account
+    );
+
+    await updateDoc(userRef, {
+      bankAccounts: updatedBankAccounts,
+      updatedAt: new Date()
+    });
+
+    return { success: true, message: "Bank account updated successfully!" };
+  } catch (error) {
+    console.error("Error updating bank account:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Delete bank account
+export const deleteBankAccount = async (userId, bankAccountId) => {
+  try {
+    const userRef = doc(db, "users", userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error("User not found");
+    }
+
+    const userData = userDoc.data();
+    const bankAccounts = userData.bankAccounts || [];
+    
+    const updatedBankAccounts = bankAccounts.filter(
+      account => account.id !== bankAccountId
+    );
+
+    if (updatedBankAccounts.length > 0) {
+      const wasDefaultDeleted = bankAccounts.find(
+        acc => acc.id === bankAccountId && acc.isDefault
+      );
+      
+      if (wasDefaultDeleted) {
+        updatedBankAccounts[0].isDefault = true;
+      }
+    }
+
+    await updateDoc(userRef, {
+      bankAccounts: updatedBankAccounts,
+      updatedAt: new Date()
+    });
+
+    return { success: true, message: "Bank account deleted successfully!" };
+  } catch (error) {
+    console.error("Error deleting bank account:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Set default bank account
+export const setDefaultBankAccount = async (userId, bankAccountId) => {
+  try {
+    const userRef = doc(db, "users", userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error("User not found");
+    }
+
+    const userData = userDoc.data();
+    const bankAccounts = userData.bankAccounts || [];
+    
+    const updatedBankAccounts = bankAccounts.map(account => ({
+      ...account,
+      isDefault: account.id === bankAccountId
+    }));
+
+    await updateDoc(userRef, {
+      bankAccounts: updatedBankAccounts,
+      updatedAt: new Date()
+    });
+
+    return { success: true, message: "Default bank account updated!" };
+  } catch (error) {
+    console.error("Error setting default bank account:", error);
+    return { success: false, error: error.message };
+  }
+};

@@ -1,4 +1,3 @@
-import { useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, limit, orderBy, query, startAfter, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -11,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { db } from '../../firebaseConfig';
-import { getAuctionProducts } from '../../services/Auction/auctionService';
+import { getAuctionProducts, getAuctionProductsByFilter, getAuctionProductsByUser, searchAuctionProducts } from '../../services/Auction/auctionService';
+import { getProductsByFilter, searchProducts } from '../../services/Product/productService';
 import ProductCard from './ProductCard';
 
 interface Product {
@@ -55,6 +55,8 @@ interface ProductFeedProps {
   onProductDeleted?: () => void;
   externalProducts?: Product[];
   isExternalData?: boolean;
+  searchTerm?: string;
+  filters?: any;
 }
 
 const PAGE_SIZE = 10;
@@ -67,13 +69,14 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
   onProductDeleted,
   externalProducts,
   isExternalData = false,
+  searchTerm,
+  filters,
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
-  const params = useLocalSearchParams();
 
   useEffect(() => {
     if (isExternalData && externalProducts) {
@@ -87,58 +90,83 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
     if (!isExternalData) {
       loadProducts();
     }
-  }, [productType, mode, userId]);
+  }, [productType, mode, userId, searchTerm, filters]);
 
-  useEffect(() => {
-    if (params.refreshAuction === 'true' && productType === 'auction') {
-      loadProducts(true);
-    }
-  }, [params.refreshAuction]);
-
-  const loadAuctionProducts = useCallback(async (filters: any = {}) => {
+  const loadAuctionProducts = useCallback(async (isLoadMore = false) => {
     try {
-      const result = await getAuctionProducts(filters);
+      let result;
       
-      if (result.success) {
-        return result.products.map(auction => {
+      if (mode === 'user' && userId) {
+        result = await getAuctionProductsByUser(userId);
+      } else if (searchTerm) {
+        result = await searchAuctionProducts(searchTerm, filters);
+      } else if (filters) {
+        result = await getAuctionProductsByFilter(filters);
+      } else {
+        result = await getAuctionProducts({ status: 'active' });
+      }
+      
+      if (result.success && result.products) {
+        const auctionProducts = result.products.map(auction => {
+          const auctionData = auction.auctionInfo || {};
+          
           return {
             id: auction.id,
             type: 'auction' as const,
             images: auction.images || [],
-            title: auction.title,
-            price: auction.startPrice,
+            title: auction.title || 'No Title',
+            price: auction.startPrice || auction.currentBid || 0,
             address: auction.address || {},
-            likeCount: 0,
-            viewCount: auction.viewCount,
+            likeCount: auction.likeCount || 0,
+            viewCount: auction.viewCount || 0,
             sellerAvatar: auction.sellerAvatar,
-            sellerName: auction.sellerName,
-            condition: auction.condition,
+            sellerName: auction.sellerName || 'Unknown Seller',
+            condition: auction.condition || 'used',
             createdAt: auction.createdAt,
             sellerId: auction.sellerId,
             auctionInfo: {
-              currentBid: auction.currentBid, 
-              startPrice: auction.startPrice, 
-              startTime: auction.auctionInfo?.startTime,
-              endTime: auction.auctionInfo?.endTime,
-              bidCount: auction.auctionInfo?.bidCount || 0,
-              status: auction.auctionInfo?.status || 'active',
-              bidIncrement: auction.auctionInfo?.bidIncrement,
-              buyNowPrice: auction.auctionInfo?.buyNowPrice,
-              highestBidder: auction.auctionInfo?.highestBidder
+              currentBid: auction.currentBid || auction.startPrice || 0,
+              startPrice: auction.startPrice || 0,
+              startTime: auctionData.startTime,
+              endTime: auctionData.endTime,
+              bidCount: auctionData.bidCount || 0,
+              status: auctionData.status || 'active',
+              bidIncrement: auctionData.bidIncrement || 0,
+              buyNowPrice: auctionData.buyNowPrice,
+              highestBidder: auctionData.highestBidder
             }
           };
         });
+        
+        return auctionProducts;
       } else {
-        throw new Error(result.error || 'Failed to load auctions');
+        return [];
       }
     } catch (error) {
       console.error('Error loading auction products:', error);
-      throw error;
+      return [];
     }
-  }, []);
+  }, [mode, userId, searchTerm, filters]);
 
   const loadNormalProducts = useCallback(async (isLoadMore = false) => {
     try {
+      if (searchTerm || filters) {
+        let result;
+        if (searchTerm) {
+          result = await searchProducts(searchTerm, filters);
+        } else {
+          result = await getProductsByFilter(filters);
+        }
+        
+        if (result.success) {
+          return result.products.map(product => ({
+            ...product,
+            type: 'normal' as const
+          }));
+        }
+        return [];
+      }
+
       const productsRef = collection(db, 'products');
       let productsQuery;
 
@@ -172,7 +200,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         } as Product);
       });
 
-      if (!isLoadMore) {
+      if (querySnapshot.docs.length > 0) {
         setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
       }
       
@@ -183,7 +211,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       console.error('Error loading normal products:', error);
       throw error;
     }
-  }, [mode, userId, lastVisible]);
+  }, [mode, userId, lastVisible, searchTerm, filters]);
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     if (isExternalData) {
@@ -200,21 +228,17 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       let productsData: Product[] = [];
 
       if (productType === 'auction') {
-        let filters: any = { status: 'active' };
-
-        if (mode === 'user' && userId) {
-          filters = { ...filters, sellerId: userId };
-        }
-
-        productsData = await loadAuctionProducts(filters);
-        
+        productsData = await loadAuctionProducts(false);
         setHasMore(false);
-      } else {
+      } else if (productType === 'normal') {
         productsData = await loadNormalProducts(false);
-        
-        if (!isRefresh) {
-          setLastVisible(productsData[productsData.length - 1]);
-        }
+      } else {
+        const [normalProducts, auctionProducts] = await Promise.all([
+          loadNormalProducts(false),
+          loadAuctionProducts(false)
+        ]);
+        productsData = [...normalProducts, ...auctionProducts];
+        setHasMore(false);
       }
 
       if (isRefresh) {
@@ -233,7 +257,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
   }, [mode, userId, isExternalData, productType, loadAuctionProducts, loadNormalProducts]);
 
   const loadMore = async () => {
-    if (!hasMore || loading || isExternalData || productType === 'auction') {
+    if (!hasMore || loading || isExternalData || productType === 'auction' || searchTerm || filters) {
       return;
     }
 
@@ -243,10 +267,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       const newProducts = await loadNormalProducts(true);
       
       setProducts(prev => [...prev, ...newProducts]);
-      
-      if (newProducts.length > 0) {
-        setLastVisible(newProducts[newProducts.length - 1]);
-      }
     } catch (error) {
       console.error('Error loading more products:', error);
     } finally {
@@ -313,10 +333,10 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
             />
           ) : undefined
         }
-        onEndReached={isExternalData || productType === 'auction' ? undefined : loadMore}
+        onEndReached={isExternalData || productType === 'auction' || searchTerm || filters ? undefined : loadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
-          hasMore && !isExternalData && productType !== 'auction' ? (
+          hasMore && !isExternalData && productType !== 'auction' && !searchTerm && !filters ? (
             <View style={styles.footer}>
               <ActivityIndicator size="small" color="#00A86B" />
               <Text style={styles.footerText}>Loading more products...</Text>

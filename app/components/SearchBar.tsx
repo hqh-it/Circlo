@@ -19,8 +19,9 @@ interface SearchBarProps {
   onSearchEnd?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
-  onClearSearch?: () => void; // Thêm prop mới
+  onClearSearch?: () => void;
   autoFocus?: boolean;
+  productType: 'normal' | 'auction';
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({
@@ -30,15 +31,15 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onSearchEnd,
   onFocus,
   onBlur,
-  onClearSearch, // Nhận prop mới
+  onClearSearch,
   autoFocus = false,
+  productType,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
 
-  // Clear timeout on unmount
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) {
@@ -49,7 +50,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
   const performSearch = async (searchTerm: string) => {
     if (!searchTerm.trim()) {
-      // If search term is empty, clear search and show all products
       if (onClearSearch) {
         onClearSearch();
       }
@@ -63,16 +63,26 @@ const SearchBar: React.FC<SearchBarProps> = ({
     }
 
     try {
-      // Import search function dynamically to avoid circular dependencies
-      const { searchProducts } = await import('../../services/Product/productService');
-      const result = await searchProducts(searchTerm);
+      let result;
+      
+      if (productType === 'normal') {
+        const { searchProducts } = await import('../../services/Product/productService');
+        result = await searchProducts(searchTerm);
+      } else {
+        const { searchAuctionProducts } = await import('../../services/Auction/auctionService');
+        result = await searchAuctionProducts(searchTerm);
+      }
       
       if (result.success) {
+        const productsWithType = result.products.map(p => ({ 
+          ...p, 
+          type: productType 
+        }));
+        
         if (onSearchResults) {
-          onSearchResults(result.products || []);
+          onSearchResults(productsWithType);
         }
       } else {
-        console.error('Search failed:', result.error);
         if (onSearchResults) {
           onSearchResults([]);
         }
@@ -93,7 +103,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const handleSearch = () => {
     Keyboard.dismiss();
     
-    // Clear any existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -104,18 +113,15 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const handleTextChange = (text: string) => {
     setSearchText(text);
 
-    // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Debounced search - search after user stops typing for 500ms
     if (text.trim().length > 0) {
       searchTimeoutRef.current = setTimeout(() => {
         performSearch(text);
       }, 500) as unknown as number;
     } else {
-      // If text is empty, clear search and show all products
       if (onClearSearch) {
         onClearSearch();
       }
@@ -135,7 +141,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
       onBlur();
     }
     
-    // If search text is empty when blur, clear search
     if (!searchText.trim() && onClearSearch) {
       onClearSearch();
     }
@@ -144,12 +149,10 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const handleClear = () => {
     setSearchText('');
     
-    // Clear timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     
-    // Clear search and show all products
     if (onClearSearch) {
       onClearSearch();
     }
@@ -161,13 +164,11 @@ const SearchBar: React.FC<SearchBarProps> = ({
         styles.searchContainer,
         isFocused && styles.searchContainerFocused,
       ]}>
-        {/* Search Icon */}
         <Image
           source={require('../assets/icons/search.png')}
           style={styles.searchIcon}
         />
         
-        {/* Search Input */}
         <TextInput
           style={styles.textInput}
           value={searchText}
@@ -183,7 +184,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
           autoCorrect={false}
         />
         
-        {/* Loading Indicator or Clear Button */}
         <View style={styles.rightContainer}>
           {isSearching ? (
             <ActivityIndicator size="small" color="#00A86B" />

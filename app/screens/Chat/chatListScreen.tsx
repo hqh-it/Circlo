@@ -446,11 +446,6 @@ const ChatListScreen = () => {
                 <Text style={styles.userName} numberOfLines={1}>
                   Auction Chat
                 </Text>
-                {item.auctionStatus === 'ended' && (
-                  <View style={styles.endedBadge}>
-                    <Text style={styles.endedBadgeText}>ENDED</Text>
-                  </View>
-                )}
               </View>
               <Text style={styles.timeText}>
                 {lastBidTime}
@@ -519,13 +514,11 @@ const ChatListScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <Header title='Chat'/>
         <View style={styles.headerDecoration} />
       </View>
 
-      {/* Tab Bar - Full width */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'regular' && styles.activeTab]}
@@ -534,7 +527,6 @@ const ChatListScreen = () => {
           <Text style={[styles.tabText, activeTab === 'regular' && styles.activeTabText]}>
             Regular Chats
           </Text>
-          {/* Only show badge for regular chats with unread messages */}
           {regularUnreadCount > 0 && (
             <View style={styles.tabBadge}>
               <Text style={styles.tabBadgeText}>{regularUnreadCount}</Text>
@@ -549,7 +541,6 @@ const ChatListScreen = () => {
           <Text style={[styles.tabText, activeTab === 'auction' && styles.activeTabText]}>
             Auction Chats
           </Text>
-          {/* No badge for auction chats */}
         </TouchableOpacity>
       </View>
 
@@ -640,8 +631,8 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     paddingHorizontal: 4,
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 5,
+    right: 5,
   },
   tabBadgeText: {
     color: '#FFFFFF',
@@ -765,18 +756,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#00A86B',
-  },
-  endedBadge: {
-    backgroundColor: '#FF4757',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  endedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   timeText: {
     fontSize: 14,

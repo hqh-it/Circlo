@@ -8,6 +8,13 @@ import { loadUserProfile } from "../../services/User/userService";
 
 const {width} = Dimensions.get("window");
 
+interface BankAccount {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  isDefault?: boolean;
+}
+
 interface UserData {
   fullName?: string;
   email?: string;
@@ -20,6 +27,7 @@ interface UserData {
     ward?: string;
   };
   avatarURL?: string;
+  bankAccounts?: BankAccount[];
 }
 
 export default function PersonalInfo() {   
@@ -220,6 +228,43 @@ export default function PersonalInfo() {
                   <Text style={styles.noDataSubtext}>Click "Edit Profile" to add your address</Text>
                 </View>
               )}
+
+              {/* Bank Accounts Card */}
+              <View style={styles.bankCard}>
+                <View style={styles.bankHeader}>
+                  <Text style={styles.cardTitle}>💳 Bank Accounts</Text>
+                  <TouchableOpacity 
+                    style={styles.addBankButton}
+                   
+                  >
+                    <Text style={styles.addBankText}>+ Add Account</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {userData?.bankAccounts && userData.bankAccounts.length > 0 ? (
+                  userData.bankAccounts.map((account, index) => (
+                    <View key={index} style={styles.bankAccountItem}>
+                      <View style={styles.bankAccountInfo}>
+                        <Text style={styles.bankName}>{account.bankName}</Text>
+                        <Text style={styles.accountNumber}>Account: {account.accountNumber}</Text>
+                        <Text style={styles.accountHolder}>Holder: {account.accountHolder}</Text>
+                      </View>
+                      {account.isDefault && (
+                        <View style={styles.defaultBadge}>
+                          <Text style={styles.defaultBadgeText}>Default</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.noBankCard}>
+                    <Text style={styles.noBankText}>🏦 You have no bank account yet</Text>
+                    <Text style={styles.noBankSubtext}>
+                      Add your bank account to receive payments from buyers
+                    </Text>
+                  </View>
+                )}
+              </View>
           </View>
       
           {/* Logout Section */}
@@ -283,6 +328,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   addressCard: {
+    width: "95%",
+    marginVertical: 10,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#00A86B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bankCard: {
     width: "95%",
     marginVertical: 10,
     padding: 16,
@@ -364,6 +423,84 @@ const styles = StyleSheet.create({
     color: '#6c757d',
     textAlign: 'center',
     marginTop: 4,
+  },
+  // Bank Account Styles
+  bankHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  addBankButton: {
+    backgroundColor: '#00A86B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  addBankText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bankAccountItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  bankAccountInfo: {
+    flex: 1,
+  },
+  bankName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  accountNumber: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  accountHolder: {
+    fontSize: 12,
+    color: '#666',
+  },
+  defaultBadge: {
+    backgroundColor: '#00A86B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  defaultBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  noBankCard: {
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
+    alignItems: 'center',
+  },
+  noBankText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6c757d',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  noBankSubtext: {
+    fontSize: 12,
+    color: '#6c757d',
+    textAlign: 'center',
   },
   // Logout Section
   logoutSection: {

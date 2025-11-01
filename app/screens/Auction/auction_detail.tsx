@@ -200,7 +200,7 @@ const AuctionDetailScreen = () => {
     );
   };
 
-  const handleJoinAuction = async () => {
+    const handleJoinAuction = async () => {
     if (!auction || !user) {
       Alert.alert('Notification', 'Please log in to join the auction');
       return;
@@ -209,42 +209,17 @@ const AuctionDetailScreen = () => {
     try {
       const channelResult = await auctionChatService.getAuctionChannelByAuctionId(auction.id);
       
-      let channelId;
-      
-      if (channelResult.success && channelResult.channel) {
-        channelId = channelResult.channel.id;
-        const joinResult = await auctionChatService.addUserToAuctionChannel(channelId, user.uid);
-        
-        if (!joinResult.success) {
-          Alert.alert('Error', 'Failed to join auction: ' + joinResult.error);
-          return;
-        }
-      } else {
-        const createData = {
-          auctionId: auction.id,
-          createdBy: user.uid,
-          participants: [user.uid, auction.sellerId],
-          productInfo: {
-            id: auction.id,
-            title: auction.title,
-            price: auction.currentBid,
-            images: auction.images,
-            sellerId: auction.sellerId,
-            bidIncrement: auction.auctionInfo.bidIncrement,
-            startTime: auction.auctionInfo.startTime,
-            endTime: auction.auctionInfo.endTime
-          },
-          startPrice: auction.startPrice
-        };
+      if (!channelResult.success || !channelResult.channel) {
+        Alert.alert('Error', 'Auction chat room not found');
+        return;
+      }
 
-        const createResult = await auctionChatService.createAuctionChannel(createData);
-        
-        if (!createResult.success) {
-          Alert.alert('Error', 'Failed to create auction room: ' + createResult.error);
-          return;
-        }
-        
-        channelId = createResult.channelId;
+      const channelId = channelResult.channel.id;
+      const joinResult = await auctionChatService.addUserToAuctionChannel(channelId, user.uid);
+      
+      if (!joinResult.success) {
+        Alert.alert('Error', 'Failed to join auction: ' + joinResult.error);
+        return;
       }
 
       const productInfo = {

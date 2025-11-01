@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuctionProductById, updateAuctionProduct } from '../../../services/Auction/auctionService';
 import { useAuth } from '../../../services/Auth/AuthContext';
+import { auctionChatService } from '../../../services/Chat/auctionChatService';
 import { loadUserData } from '../../../services/User/userService';
 import Header from "../../components/header_for_detail";
 import AddProduct from '../Products/add_product';
@@ -158,6 +159,12 @@ const EditAuctionProduct = () => {
       if (result.success && result.product) {
         const product = result.product as AuctionProduct;
         
+        console.log('Original product address:', product.address);
+        console.log('Is another address:', product.address?.isAnotherAddress);
+        
+        // Đảm bảo địa chỉ được giữ nguyên
+        const addressData = product.address || null;
+        
         setFormData({
           title: product.title || '',
           description: product.description || '',
@@ -166,7 +173,7 @@ const EditAuctionProduct = () => {
           category: product.category || '',
           images: product.images || [],
           video: product.video || null,
-          address: product.address || null
+          address: addressData // Giữ nguyên địa chỉ từ database
         });
 
         const startTime = product.auctionInfo?.startTime;
@@ -204,6 +211,11 @@ const EditAuctionProduct = () => {
             buyNowPrice: product.auctionInfo?.buyNowPrice?.toString() || ''
           });
         }
+
+        // Debug: kiểm tra formData sau khi set
+        setTimeout(() => {
+          console.log('FormData after setting:', formData);
+        }, 100);
       } else {
         Alert.alert('Error', 'Failed to load product data');
         router.back();
@@ -218,6 +230,7 @@ const EditAuctionProduct = () => {
   };
 
   const handleFormDataChange = useCallback((newFormData: ProductFormData) => {
+    console.log('Form data changed - address:', newFormData.address);
     setFormData(newFormData);
   }, []);
 
@@ -285,110 +298,179 @@ const EditAuctionProduct = () => {
     return endDateTime;
   };
 
+  const updateAuctionChatChannel = async (productId: string) => {
+    try {
+      console.log('Starting to update auction chat channel for product:', productId);
+      
+      if (!user || !formData) {
+        console.log('Missing user or formData');
+        return { success: false, error: 'Missing user or product data' };
+      }
+
+      const channelResult = await auctionChatService.getAuctionChannelByAuctionId(productId);
+      console.log('Channel result:', channelResult);
+      
+      if (!channelResult.success || !channelResult.channel) {
+        console.log('Auction channel not found');
+        return { success: false, error: 'Auction channel not found' };
+      }
+
+      const startDateTime = new Date(auctionSettings.startDate!);
+      startDateTime.setHours(auctionSettings.startTime!.getHours());
+      startDateTime.setMinutes(auctionSettings.startTime!.getMinutes());
+
+      const endDateTime = calculateEndTime();
+      
+      console.log('New data to update:');
+      console.log('- Title:', formData.title);
+      console.log('- Price:', formData.price);
+      console.log('- Bid Increment:', auctionSettings.bidIncrement);
+      console.log('- Start Time:', startDateTime);
+      console.log('- End Time:', endDateTime);
+      console.log('- Images:', formData.images);
+
+      const updateData = {
+        currentBid: parseFloat(formData.price),
+        productInfo: {
+          id: productId,
+          title: formData.title,
+          images: formData.images,
+          startPrice: parseFloat(formData.price),
+          sellerId: user.uid,
+          bidIncrement: parseFloat(auctionSettings.bidIncrement),
+          startTime: startDateTime,
+          endTime: endDateTime
+        }
+      };
+
+      console.log('Update data to send:', updateData);
+
+      const updateResult = await auctionChatService.updateAuctionChannel(productId, updateData);
+      console.log('Update result:', updateResult);
+      
+      return updateResult;
+    } catch (error: any) {
+      console.error('Error in updateAuctionChatChannel:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const handleUpdateProduct = async () => {
-  if (!formData.title.trim()) {
-    Alert.alert('Error', 'Please enter product title');
-    return;
-  }
-  if (!formData.description.trim()) {
-    Alert.alert('Error', 'Please enter product description');
-    return;
-  }
-  if (!formData.price || parseFloat(formData.price) <= 0) {
-    Alert.alert('Error', 'Please enter valid price');
-    return;
-  }
-  if (!formData.category) {
-    Alert.alert('Error', 'Please select category');
-    return;
-  }
-  if (formData.images.length === 0) {
-    Alert.alert('Error', 'Please add at least one image');
-    return;
-  }
-  if (!auctionSettings.startDate) {
-    Alert.alert('Error', 'Please select start date');
-    return;
-  }
-  if (!auctionSettings.startTime) {
-    Alert.alert('Error', 'Please select start time');
-    return;
-  }
-  if (!auctionSettings.durationValue || parseInt(auctionSettings.durationValue) <= 0) {
-    Alert.alert('Error', 'Please enter valid duration');
-    return;
-  }
-  if (!auctionSettings.bidIncrement || parseFloat(auctionSettings.bidIncrement) <= 0) {
-    Alert.alert('Error', 'Please enter valid bid increment');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const productId = Array.isArray(id) ? id[0] : id;
-    
-    if (!productId) {
-      Alert.alert('Error', 'Product ID is missing');
+    if (!formData.title.trim()) {
+      Alert.alert('Error', 'Please enter product title');
+      return;
+    }
+    if (!formData.description.trim()) {
+      Alert.alert('Error', 'Please enter product description');
+      return;
+    }
+    if (!formData.price || parseFloat(formData.price) <= 0) {
+      Alert.alert('Error', 'Please enter valid price');
+      return;
+    }
+    if (!formData.category) {
+      Alert.alert('Error', 'Please select category');
+      return;
+    }
+    if (formData.images.length === 0) {
+      Alert.alert('Error', 'Please add at least one image');
+      return;
+    }
+    if (!auctionSettings.startDate) {
+      Alert.alert('Error', 'Please select start date');
+      return;
+    }
+    if (!auctionSettings.startTime) {
+      Alert.alert('Error', 'Please select start time');
+      return;
+    }
+    if (!auctionSettings.durationValue || parseInt(auctionSettings.durationValue) <= 0) {
+      Alert.alert('Error', 'Please enter valid duration');
+      return;
+    }
+    if (!auctionSettings.bidIncrement || parseFloat(auctionSettings.bidIncrement) <= 0) {
+      Alert.alert('Error', 'Please enter valid bid increment');
       return;
     }
 
-    const startDateTime = new Date(auctionSettings.startDate);
-    startDateTime.setHours(auctionSettings.startTime!.getHours());
-    startDateTime.setMinutes(auctionSettings.startTime!.getMinutes());
+    setLoading(true);
 
-    const duration = parseInt(auctionSettings.durationValue);
-    const endDateTime = new Date(startDateTime);
-    
-    switch (auctionSettings.durationUnit) {
-      case 'minutes':
-        endDateTime.setMinutes(endDateTime.getMinutes() + duration);
-        break;
-      case 'hours':
-        endDateTime.setHours(endDateTime.getHours() + duration);
-        break;
-      case 'days':
-        endDateTime.setDate(endDateTime.getDate() + duration);
-        break;
+    try {
+      const productId = Array.isArray(id) ? id[0] : id;
+      
+      if (!productId) {
+        Alert.alert('Error', 'Product ID is missing');
+        return;
+      }
+
+      const startDateTime = new Date(auctionSettings.startDate);
+      startDateTime.setHours(auctionSettings.startTime!.getHours());
+      startDateTime.setMinutes(auctionSettings.startTime!.getMinutes());
+
+      const duration = parseInt(auctionSettings.durationValue);
+      const endDateTime = new Date(startDateTime);
+      
+      switch (auctionSettings.durationUnit) {
+        case 'minutes':
+          endDateTime.setMinutes(endDateTime.getMinutes() + duration);
+          break;
+        case 'hours':
+          endDateTime.setHours(endDateTime.getHours() + duration);
+          break;
+        case 'days':
+          endDateTime.setDate(endDateTime.getDate() + duration);
+          break;
+      }
+
+      const auctionSettingsData = {
+        startTime: startDateTime,
+        endTime: endDateTime,
+        bidIncrement: parseFloat(auctionSettings.bidIncrement),
+        buyNowPrice: auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null
+      };
+
+      const productData: ProductData = {
+        title: formData.title,
+        description: formData.description,
+        price: formData.price,
+        condition: formData.condition,
+        category: formData.category,
+        images: formData.images,
+        video: formData.video,
+        address: formData.address // Giữ nguyên địa chỉ
+      };
+
+      console.log('Updating product with address:', productData.address);
+
+      // Step 1: Cập nhật sản phẩm đấu giá
+      const result = await updateAuctionProduct(
+        productId,
+        productData,
+        auctionSettingsData,
+        formData.images
+      );
+
+      if (result.success) {
+        // Step 2: Cập nhật kênh chat
+        const channelResult = await updateAuctionChatChannel(productId);
+
+        if (channelResult.success) {
+          Alert.alert('Success', 'Auction product and chat channel updated successfully!');
+        } else {
+          Alert.alert('Success', 'Auction product updated successfully, but chat channel update failed.');
+        }
+        
+        router.back();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to update auction product');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const auctionSettingsData = {
-      startTime: startDateTime,
-      endTime: endDateTime,
-      bidIncrement: parseFloat(auctionSettings.bidIncrement),
-      buyNowPrice: auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null
-    };
-
-    const productData: ProductData = {
-      title: formData.title,
-      description: formData.description,
-      price: formData.price,
-      condition: formData.condition,
-      category: formData.category,
-      images: formData.images,
-      video: formData.video,
-      address: formData.address
-    };
-
-    const result = await updateAuctionProduct(
-      productId,
-      productData,
-      auctionSettingsData,
-      formData.images
-    );
-
-    if (result.success) {
-      Alert.alert('Success', 'Auction product updated successfully!');
-      router.back();
-    } else {
-      Alert.alert('Error', result.error || 'Failed to update auction product');
-    }
-  } catch (error: any) {
-    Alert.alert('Error', error.message);
-  } finally {
-    setLoading(false);
-  }
-};
   const handleNextToAuction = () => {
     if (formData.title && formData.description && formData.price && formData.category && formData.images.length > 0) {
       setCurrentStep('auction_settings');
@@ -421,6 +503,7 @@ const EditAuctionProduct = () => {
               showHeader={false}
               initialData={formData}
               onFormDataChange={handleFormDataChange}
+              isEditMode={true}
             />
           </View>
         </View>
@@ -463,6 +546,13 @@ const EditAuctionProduct = () => {
                   {parseInt(formData.price).toLocaleString('en-US')} VND
                 </Text>
                 <Text style={styles.startingPrice}>Starting Price</Text>
+                {formData.address && (
+                  <Text style={styles.productAddress}>
+                    {formData.address.isAnotherAddress ? 
+                      `${formData.address.recipientName} - ${formData.address.specificAddress}` : 
+                      'Default Address'}
+                  </Text>
+                )}
               </View>
             </View>
           )}
@@ -872,6 +962,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
+  },
+  productAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   auctionForm: {
     backgroundColor: '#fff',

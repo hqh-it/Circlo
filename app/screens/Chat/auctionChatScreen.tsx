@@ -673,7 +673,7 @@ const AuctionChatScreen = () => {
               product={{
                 id: auctionChannel.productInfo.id,
                 title: auctionChannel.productInfo.title,
-                price: auctionChannel.productInfo.price,
+                price: auctionChannel.productInfo.startPrice || 0,
                 images: auctionChannel.productInfo.images,
                 sellerId: auctionChannel.productInfo.sellerId
               }}
@@ -682,8 +682,12 @@ const AuctionChatScreen = () => {
           )}
 
           {renderAuctionStats()}
-
           <View style={styles.chatContent}>
+  
+            <Image 
+              source={require('../../assets/images/auctionChat.gif')}
+              style={styles.backgroundGif}
+            />
             <FlatList
               ref={flatListRef}
               data={messages}
@@ -715,8 +719,8 @@ const AuctionChatScreen = () => {
                 startPrice: auctionChannel.productInfo.price,
                 bidIncrement: auctionChannel.productInfo.bidIncrement,
                 title: auctionChannel.productInfo.title
-              }
-            }}
+              }}
+            }
             participantsData={participantsData}
             messages={messages}
             formatCurrency={formatCurrency}
@@ -875,9 +879,22 @@ const styles = StyleSheet.create({
   chatContent: {
     flex: 1,
     backgroundColor: "#FAFAFA",
+    position: 'relative',
+  },
+  backgroundGif: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+    zIndex:0,       
   },
   messagesList: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   messagesContent: {
     paddingVertical: 20,
@@ -953,7 +970,7 @@ const styles = StyleSheet.create({
 
   senderName: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#fffce2ff",
     marginBottom: 6,
     marginLeft: 4,
     fontWeight: '600',
@@ -1055,7 +1072,7 @@ const styles = StyleSheet.create({
 
   messageTime: {
     fontSize: 11,
-    color: '#999999',
+    color: '#fffde9ff',
     marginTop: 8,
     textAlign: 'center',
   },
