@@ -133,11 +133,10 @@ export async function saveUserProfile(user, userData, addressData) {
     const userData = userDoc.data();
     const currentBankAccounts = userData.bankAccounts || [];
     
-    // Set as default if first account
     const isFirstAccount = currentBankAccounts.length === 0;
     const newBankAccount = {
       ...bankAccount,
-      id: Date.now().toString(), // Simple ID generation
+      id: Date.now().toString(), 
       isDefault: isFirstAccount
     };
 
@@ -162,7 +161,6 @@ export async function saveUserProfile(user, userData, addressData) {
   }
 };
 
-// Update bank account
 export const updateBankAccount = async (userId, bankAccountId, updates) => {
   try {
     const userRef = doc(db, "users", userId);

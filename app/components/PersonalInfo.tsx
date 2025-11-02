@@ -1,15 +1,30 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Dimensions, Image, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Dimensions,
+  Image,
+  ImageBackground,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { useAuth } from "../../services/Auth/AuthContext";
+import { banksData } from "../../services/User/bankData";
 import { getFollowCounts } from "../../services/User/followService";
-import { loadUserProfile } from "../../services/User/userService";
+import { deleteBankAccount, loadUserProfile, setDefaultBankAccount } from "../../services/User/userService";
+import AddBank from "../components/AddBank";
 
-const {width} = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
 interface BankAccount {
+  id: string;
   bankName: string;
+  bankShortName?: string;
+  bankCode?: string;
   accountNumber: string;
   accountHolder: string;
   isDefault?: boolean;
@@ -35,12 +50,19 @@ export default function PersonalInfo() {
   const { user, logout } = useAuth();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAddBankModal, setShowAddBankModal] = useState(false);
+  const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
   const [followCounts, setFollowCounts] = useState({
     followerCount: 0,
     followingCount: 0
   });
 
-  // Function to load user data
+  const getBankLogo = (bankCode?: string) => {
+    if (!bankCode) return null;
+    const bank = banksData.find(bank => bank.code === bankCode);
+    return bank?.logo || null;
+  };
+
   const loadData = async () => {
     if (!user) return;
     
@@ -49,7 +71,6 @@ export default function PersonalInfo() {
       const data = await loadUserProfile(user);
       setUserData(data);
       
-      // Load follow counts
       const counts = await getFollowCounts(user.uid);
       if (counts.success) {
         setFollowCounts({
@@ -57,8 +78,6 @@ export default function PersonalInfo() {
           followingCount: counts.followingCount
         });
       }
-      
-      console.log('🔄 PersonalInfo: Data loaded successfully');
     } catch (error) {
       console.error("Error loading user data:", error);
     } finally {
@@ -66,22 +85,84 @@ export default function PersonalInfo() {
     }
   };
 
-  // Load data when component mounts
   useEffect(() => {
     loadData();
   }, [user]);
 
-  // Reload data when screen comes into focus (after back from EditProfile)
   useFocusEffect(
     useCallback(() => {
-      console.log('🎯 PersonalInfo: Screen focused, reloading data...');
       loadData();
     }, [user])
   );
 
-  // Function to display value or placeholder
+  const handleBankAdded = () => {
+    setEditingBank(null);
+    loadData();
+  };
+
+  const handleEditBank = (account: BankAccount) => {
+    setEditingBank(account);
+    setShowAddBankModal(true);
+  };
+
+  const handleSetDefault = async (accountId: string) => {
+    if (!user) return;
+
+    try {
+      const result = await setDefaultBankAccount(user.uid, accountId);
+      if (result.success) {
+        loadData();
+      } else {
+        Alert.alert("Error", result.error || "Failed to set default bank account");
+      }
+    } catch (error) {
+      console.error("Error setting default bank:", error);
+      Alert.alert("Error", "Failed to set default bank account");
+    }
+  };
+
+  const handleDeleteBank = (account: BankAccount) => {
+    if (!user) return;
+
+    Alert.alert(
+      "Confirm Delete",
+      `Are you sure you want to delete ${account.bankName} account?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await deleteBankAccount(user.uid, account.id);
+              if (result.success) {
+                loadData();
+              } else {
+                Alert.alert("Error", result.error || "Failed to delete bank account");
+              }
+            } catch (error) {
+              console.error("Error deleting bank account:", error);
+              Alert.alert("Error", "Failed to delete bank account");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const displayValue = (value: string | undefined, placeholder: string = "Not added yet") => {
     return value && value.trim() !== "" ? value : placeholder;
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Confirm Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Logout", onPress: logout, style: "destructive" }
+      ]
+    );
   };
 
   if (loading) {
@@ -93,228 +174,341 @@ export default function PersonalInfo() {
   }
 
   return (
-    <ScrollView>
-      <View style={styles.container}>
-          <View style={{width:width,flexDirection:"column", justifyContent:"space-between",}}>
-              <ImageBackground source={require('../assets/images/background_profile.jpg')}>
-                {/* Avatar */}
-                <View style={{justifyContent:"center", alignItems:"center",paddingVertical:10}}>
-                    <Image
-                    source={
-                      userData?.avatarURL
-                        ? { uri: userData.avatarURL }
-                        : require("../assets/icons/profile-picture.png")
-                    }
-                    style={{
-                        width: width*0.35,
-                        height: width*0.35,
-                        borderRadius: 100,
-                        borderWidth:5,
-                        borderColor:"#D4A017",
-                        }}/>
-                </View>
-                {/*Follow*/}
-                <View style={{
-                    width:width,
-                    flexDirection:"row",
-                    justifyContent:"space-around",
-                    alignItems:"center",
-                    paddingVertical:5,
-                    backgroundColor:"#f1aa05d5",
-                    }}>
-                    <View style={styles.ratingcolumn}>
-                      <Image style={styles.ratingicon}source={require('../assets/icons/follower.png')} />
-                      <Text style={styles.ratingText}>Followers: {followCounts.followerCount}</Text>
-                    </View>
-                    <TouchableOpacity onPress={()=>router.push('/screens/Profile/FollowListScreen')}>
-                      <View style={styles.ratingcolumn}>
-                        <Image style={styles.ratingicon} source={require('../assets/icons/following.png')} />
-                        <Text style={styles.ratingText}>Following: {followCounts.followingCount}</Text>
-                      </View>
-                    </TouchableOpacity>
-                </View>
-              </ImageBackground>
+    <View style={styles.container}>
+      <View style={styles.headerSection}>
+        <ImageBackground 
+          source={require('../assets/images/background_profile.jpg')} 
+          style={styles.backgroundImage}
+        >
+          <View style={styles.avatarContainer}>
+            <Image
+              source={
+                userData?.avatarURL
+                  ? { uri: userData.avatarURL }
+                  : require("../assets/icons/profile-picture.png")
+              }
+              style={styles.avatar}
+            />
           </View>
-          <View style={{width:width, flexDirection:"column", justifyContent:"center", alignItems:"center",paddingHorizontal:10}}>
-              <View style={{width:width, flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingHorizontal:10,padding:5,borderTopWidth:5,borderColor:"white"}} >
-                <Text style={styles.title}>Your Information</Text>
-                <View style={{flexDirection:"column",justifyContent:"space-between", alignItems:"center"}}>
-                    <Image source={require('../assets/icons/edit.png')}
-                    style={{
-                      width:width*0.03,
-                      height:width*0.03,
-                      padding:5
-                    }}/>
-                    <TouchableOpacity onPress={()=>router.push("/screens/Profile/EditProfile")} >
-                      <Text style={styles.editText}>Edit Profile</Text>
-                    </TouchableOpacity>
-                </View>
+          
+          <View style={styles.followContainer}>
+            <View style={styles.followColumn}>
+              <Image 
+                style={styles.followIcon} 
+                source={require('../assets/icons/follower.png')} 
+              />
+              <Text style={styles.followText}>
+                Followers: {followCounts.followerCount}
+              </Text>
+            </View>
+            
+            <TouchableOpacity 
+              onPress={() => router.push('/screens/Profile/FollowListScreen')}
+            >
+              <View style={styles.followColumn}>
+                <Image 
+                  style={styles.followIcon} 
+                  source={require('../assets/icons/following.png')} 
+                />
+                <Text style={styles.followText}>
+                  Following: {followCounts.followingCount}
+                </Text>
               </View>
-              {/* Basic Information Card */}
-              <View style={styles.infoCard}>
-                <Text style={styles.cardTitle}>👤 Basic Information</Text>
-      
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Full Name:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData?.fullName, "Not added yet")}
-                  </Text>
-                </View>
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Email:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData?.email, "Not added yet")}
-                  </Text>
-                </View>
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Phone:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData?.phone, "Not added yet")}
-                  </Text>
-                </View>
-              </View>
-              {/* Address Information Card - Only show if address exists */}
-              {(userData?.address?.street || userData?.address?.province || userData?.address?.district || userData?.address?.ward) && (
-                <View style={styles.addressCard}>
-                  <Text style={styles.cardTitle}>📍 Address Information</Text>
-      
-                  {userData.address.street && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>Street:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.address.street)}
-                      </Text>
-                    </View>
-                  )}
-                  {userData.address.ward && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>Ward:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.address.ward)}
-                      </Text>
-                    </View>
-                  )}
-                  {userData.address.district && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>District:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.address.district)}
-                      </Text>
-                    </View>
-                  )}
-                  {userData.address.province && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoLabel}>Province:</Text>
-                      <Text style={styles.infoValue}>
-                        {displayValue(userData.address.province)}
-                      </Text>
-                    </View>
-                  )}
-                  {/* Full Address Summary */}
-                  {userData.address.fullAddress && (
-                    <View style={styles.fullAddressSection}>
-                      <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
-                      <Text style={styles.fullAddressText}>
-                        {userData.address.fullAddress}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              {/* Show message if no address data */}
-              {!(userData?.address?.street || userData?.address?.province) && (
-                <View style={styles.noDataCard}>
-                  <Text style={styles.noDataText}>📍 No address information added yet</Text>
-                  <Text style={styles.noDataSubtext}>Click "Edit Profile" to add your address</Text>
-                </View>
-              )}
-
-              {/* Bank Accounts Card */}
-              <View style={styles.bankCard}>
-                <View style={styles.bankHeader}>
-                  <Text style={styles.cardTitle}>💳 Bank Accounts</Text>
-                  <TouchableOpacity 
-                    style={styles.addBankButton}
-                   
-                  >
-                    <Text style={styles.addBankText}>+ Add Account</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {userData?.bankAccounts && userData.bankAccounts.length > 0 ? (
-                  userData.bankAccounts.map((account, index) => (
-                    <View key={index} style={styles.bankAccountItem}>
-                      <View style={styles.bankAccountInfo}>
-                        <Text style={styles.bankName}>{account.bankName}</Text>
-                        <Text style={styles.accountNumber}>Account: {account.accountNumber}</Text>
-                        <Text style={styles.accountHolder}>Holder: {account.accountHolder}</Text>
-                      </View>
-                      {account.isDefault && (
-                        <View style={styles.defaultBadge}>
-                          <Text style={styles.defaultBadgeText}>Default</Text>
-                        </View>
-                      )}
-                    </View>
-                  ))
-                ) : (
-                  <View style={styles.noBankCard}>
-                    <Text style={styles.noBankText}>🏦 You have no bank account yet</Text>
-                    <Text style={styles.noBankSubtext}>
-                      Add your bank account to receive payments from buyers
-                    </Text>
-                  </View>
-                )}
-              </View>
+            </TouchableOpacity>
           </View>
-      
-          {/* Logout Section */}
-          <View style={styles.logoutSection}>
-              <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-                <Text style={styles.logoutText}>🚪 Logout</Text>
-              </TouchableOpacity>
-          </View>
-      
+        </ImageBackground>
       </View>
-    </ScrollView>
+
+      <ScrollView style={styles.contentScrollView}>
+        <View style={styles.contentContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Information</Text>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => router.push("/screens/Profile/EditProfile")}
+            >
+              <Image 
+                source={require('../assets/icons/edit.png')}
+                style={styles.editIcon}
+              />
+              <Text style={styles.editText}>Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.cardTitle}>👤 Basic Information</Text>
+  
+            <View style={styles.infoSection}>
+              <Text style={styles.infoLabel}>Full Name:</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(userData?.fullName)}
+              </Text>
+            </View>
+            
+            <View style={styles.infoSection}>
+              <Text style={styles.infoLabel}>Email:</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(userData?.email)}
+              </Text>
+            </View>
+            
+            <View style={styles.infoSection}>
+              <Text style={styles.infoLabel}>Phone:</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(userData?.phone)}
+              </Text>
+            </View>
+          </View>
+
+          {(userData?.address?.street || userData?.address?.province || userData?.address?.district || userData?.address?.ward) ? (
+            <View style={styles.addressCard}>
+              <Text style={styles.cardTitle}>📍 Address Information</Text>
+  
+              {userData.address.street && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Street:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData.address.street)}
+                  </Text>
+                </View>
+              )}
+              
+              {userData.address.ward && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Ward:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData.address.ward)}
+                  </Text>
+                </View>
+              )}
+              
+              {userData.address.district && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>District:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData.address.district)}
+                  </Text>
+                </View>
+              )}
+              
+              {userData.address.province && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Province:</Text>
+                  <Text style={styles.infoValue}>
+                    {displayValue(userData.address.province)}
+                  </Text>
+                </View>
+              )}
+              
+              {userData.address.fullAddress && (
+                <View style={styles.fullAddressSection}>
+                  <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
+                  <Text style={styles.fullAddressText}>
+                    {userData.address.fullAddress}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.noDataCard}>
+              <Text style={styles.noDataText}>📍 No address information added yet</Text>
+              <Text style={styles.noDataSubtext}>
+                Click "Edit Profile" to add your address
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.bankCard}>
+            <View style={styles.bankHeader}>
+              <Text style={styles.cardTitle}>💳 Bank Accounts</Text>
+              <TouchableOpacity 
+                style={styles.addBankButton}
+                onPress={() => {
+                  setEditingBank(null);
+                  setShowAddBankModal(true);
+                }}
+              >
+                <Text style={styles.addBankText}>+ Add Bank</Text>
+              </TouchableOpacity>
+            </View>
+
+            {userData?.bankAccounts && userData.bankAccounts.length > 0 ? (
+              userData.bankAccounts.map((account) => {
+                const bankLogo = getBankLogo(account.bankCode);
+                return (
+                  <View key={account.id} style={styles.bankAccountItem}>
+                    {bankLogo && (
+                      <Image 
+                        source={{ uri: bankLogo }} 
+                        style={styles.bankLogo}
+                        resizeMode="contain"
+                      />
+                    )}
+                    
+                    <View style={styles.bankAccountInfo}>
+                      <Text style={styles.bankName}>{account.bankName}</Text>
+                      <Text style={styles.accountNumber}>
+                        Account: {account.accountNumber}
+                      </Text>
+                      <Text style={styles.accountHolder}>
+                        Holder: {account.accountHolder}
+                      </Text>
+                    </View>
+
+                    <View style={styles.bankActions}>
+                      <TouchableOpacity 
+                        style={[
+                          styles.defaultButton, 
+                          account.isDefault ? styles.defaultButtonActive : styles.defaultButtonInactive
+                        ]}
+                        onPress={() => handleSetDefault(account.id)}
+                      >
+                        <Text style={[
+                          styles.defaultButtonText,
+                          account.isDefault ? styles.defaultButtonTextActive : styles.defaultButtonTextInactive
+                        ]}>
+                          Default
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={styles.editBankButton}
+                        onPress={() => handleEditBank(account)}
+                      >
+                        <Text style={styles.editButtonText}>Edit</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={() => handleDeleteBank(account)}
+                      >
+                        <Text style={styles.deleteButtonText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.noBankCard}>
+                <Text style={styles.noBankText}>🏦 You have no bank account yet</Text>
+                <Text style={styles.noBankSubtext}>
+                  Add your bank account to receive payments from buyers
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.footerSection}>
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={handleLogout}
+        >
+          <Text style={styles.logoutText}>🚪 Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      <AddBank
+        visible={showAddBankModal}
+        onClose={() => {
+          setShowAddBankModal(false);
+          setEditingBank(null);
+        }}
+        onBankAdded={handleBankAdded}
+        editingBank={editingBank}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex:1,
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  headerSection: {
     width: width,
-    flexDirection: "column",
+  },
+  backgroundImage: {
+    width: '100%',
+  },
+  avatarContainer: {
+    justifyContent: "center",
     alignItems: "center",
+    paddingVertical: 10,
   },
-  title:{
-    fontSize:16,
-    fontWeight:"bold",
-    color:"#333",
+  avatar: {
+    width: width * 0.35,
+    height: width * 0.35,
+    borderRadius: 100,
+    borderWidth: 5,
+    borderColor: "#D4A017",
   },
-  editText: {
-    fontSize:12,
-    color:"#00A86B",
-    fontWeight:"600",
+  followContainer: {
+    width: width,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingVertical: 5,
+    backgroundColor: "#f1aa05d5",
+    borderBottomWidth: 5,
+    borderColor: "white",
   },
-  ratingcolumn: {
+  followColumn: {
     flexDirection: "column",
-    marginVertical: 5,
-    alignItems:"center",
-    justifyContent:"center"
+    marginVertical: 2,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  ratingicon:{
-    width: width*0.05,
-    height: width*0.05,    
+  followIcon: {
+    width: width * 0.05,
+    height: width * 0.05,  
   },
-  ratingText: {
+  followText: {
     fontSize: 12,
     fontWeight: '500',
     color: '#333',
     marginTop: 2,
   },
-  // Card Styles
+  contentScrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: 10,
+    paddingBottom: 20,
+  },
+  sectionHeader: {
+    width: width,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical:5,
+    backgroundColor: '#f5f5f5',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  editButton: {
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingRight:25
+  },
+  editIcon: {
+    width: width * 0.03,
+    height: width * 0.03,
+    marginBottom: 2,
+  },
+  editText: {
+    fontSize: 12,
+    color: "#00A86B",
+    fontWeight: "600",
+  },
   infoCard: {
-    width: "95%",
+    width: "100%",
     marginVertical: 10,
     padding: 16,
     backgroundColor: '#ffffff',
@@ -328,7 +522,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   addressCard: {
-    width: "95%",
+    width: "100%",
     marginVertical: 10,
     padding: 16,
     backgroundColor: '#ffffff',
@@ -342,7 +536,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   bankCard: {
-    width: "95%",
+    width: "100%",
     marginVertical: 10,
     padding: 16,
     backgroundColor: '#ffffff',
@@ -356,7 +550,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   noDataCard: {
-    width: "95%",
+    width: "100%",
     marginVertical: 10,
     padding: 20,
     backgroundColor: '#f8f9fa',
@@ -424,7 +618,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
-  // Bank Account Styles
   bankHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -444,7 +637,6 @@ const styles = StyleSheet.create({
   },
   bankAccountItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
     backgroundColor: '#f8f9fa',
@@ -453,11 +645,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
+  bankLogo: {
+    width: 50,
+    height: 50,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: "#e3e3e3ff",
+    marginRight: 12
+  },
   bankAccountInfo: {
     flex: 1,
   },
   bankName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
@@ -471,13 +671,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-  defaultBadge: {
-    backgroundColor: '#00A86B',
+  bankActions: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  defaultButton: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
+    minWidth: 60,
+    alignItems: 'center',
   },
-  defaultBadgeText: {
+  defaultButtonActive: {
+    backgroundColor: '#00A86B',
+  },
+  defaultButtonInactive: {
+    backgroundColor: '#e0e0e0',
+  },
+  defaultButtonText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  defaultButtonTextActive: {
+    color: '#fff',
+  },
+  defaultButtonTextInactive: {
+    color: '#666',
+  },
+  editBankButton: {
+    backgroundColor: '#c7b000ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  deleteButton: {
+    backgroundColor: '#ec8277ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
@@ -502,22 +745,24 @@ const styles = StyleSheet.create({
     color: '#6c757d',
     textAlign: 'center',
   },
-  // Logout Section
-  logoutSection: {
-    marginTop: 20,
-    marginBottom: 30,
-    padding: 10,
+  footerSection: {
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
   logoutButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 40,
+    paddingVertical: 12,
     backgroundColor: '#e74c3c',
     borderRadius: 8,
     alignItems: 'center',
+    minWidth: 150,
+    alignSelf: 'center',
   },
   logoutText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });
