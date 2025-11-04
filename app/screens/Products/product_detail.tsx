@@ -17,10 +17,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { chatService } from '../../../services/Chat/chatService';
 import { getProductById, toggleProductLike } from '../../../services/Product/productService';
+import BuyButton from '../../components/BuyButton';
+import BuyNow from '../../components/BuyNow';
 import CommentSection from '../../components/CommentSection';
 import FollowButton from '../../components/FollowButton';
 import Header from '../../components/header_for_detail';
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ProductDetail {
@@ -38,6 +39,9 @@ interface ProductDetail {
     street?: string;
     ward?: string;
     fullAddress?: string;
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
   };
   sellerId: string;
   sellerName: string;
@@ -59,6 +63,8 @@ const ProductDetailScreen = () => {
   const [mediaIndex, setMediaIndex] = useState(0);
   const [liking, setLiking] = useState(false);
   const [videoRef, setVideoRef] = useState<any>(null);
+  const [showBuyNowPopup, setShowBuyNowPopup] = useState(false);
+  const [orderUpdated, setOrderUpdated] = useState(0);
 
   const productId = params.id as string;
 
@@ -87,7 +93,7 @@ const ProductDetailScreen = () => {
     };
 
     loadProductDetail();
-  }, [productId, router]);
+  }, [productId, router, orderUpdated]);
 
   const imageItems = product?.images || [];
 
@@ -119,79 +125,79 @@ const ProductDetailScreen = () => {
   };
 
   const handleContactSeller = async () => {
-  if (!product || !user) {
-    Alert.alert('Nofification', 'Please log in to your account for chat with seller');
-    return;
-  }
-  try {
-    console.log('🔄 Bắt đầu tạo/tìm phòng chat...');
-    
-    const createData = {
-      participants: [user.uid, product.sellerId],
+    if (!product || !user) {
+      Alert.alert('Nofification', 'Please log in to your account for chat with seller');
+      return;
+    }
+    try {
+      console.log('🔄 Bắt đầu tạo/tìm phòng chat...');
       
-      participantDetails: {
-        [user.uid]: {
-          name: user.displayName || 'You', 
-          avatar: user.photoURL || ''
+      const createData = {
+        participants: [user.uid, product.sellerId],
+        
+        participantDetails: {
+          [user.uid]: {
+            name: user.displayName || 'You', 
+            avatar: user.photoURL || ''
+          },
+
+          [product.sellerId]: {
+            name: product.sellerName, 
+            avatar: product.sellerAvatar || ''
+          }
         },
 
-        [product.sellerId]: {
-          name: product.sellerName, 
-          avatar: product.sellerAvatar || ''
-        }
-      },
-
-      productId: product.id,
-      productInfo: {
-        id: product.id,
-        title: product.title,
-        price: product.price,
-        images: product.images,
-        sellerId: product.sellerId
-      },
-      type: 'direct'
-    };
-
-    
-    const  result = await chatService.createOrGetChannel(createData);
-    
-    if (result.success) {
-      console.log('✅ Phòng chat:', result.channelId);
-
-      const productInfo = {
-        id: product.id,
-        title: product.title,
-        price: product.price,
-        images: product.images,
-        sellerId: product.sellerId
+        productId: product.id,
+        productInfo: {
+          id: product.id,
+          title: product.title,
+          price: product.price,
+          images: product.images,
+          sellerId: product.sellerId
+        },
+        type: 'direct'
       };
 
-      router.push({
-        pathname: '../../screens/Chat/chatScreen',
-        params: {
-          channelId: result.channelId,
-          productData: JSON.stringify(productInfo) 
-        }
-      });
-    } else {
-      Alert.alert('Lỗi', 'Không thể tạo phòng chat: ' + result.error);
+      
+      const  result = await chatService.createOrGetChannel(createData);
+      
+      if (result.success) {
+        console.log('✅ Phòng chat:', result.channelId);
+
+        const productInfo = {
+          id: product.id,
+          title: product.title,
+          price: product.price,
+          images: product.images,
+          sellerId: product.sellerId
+        };
+
+        router.push({
+          pathname: '../../screens/Chat/chatScreen',
+          params: {
+            channelId: result.channelId,
+            productData: JSON.stringify(productInfo) 
+          }
+        });
+      } else {
+        Alert.alert('Lỗi', 'Không thể tạo phòng chat: ' + result.error);
+      }
+    } catch (error) {
+      console.error('❌ Lỗi khi tạo phòng chat:', error);
+      Alert.alert('Lỗi', 'Không thể bắt đầu chat với người bán');
     }
-  } catch (error) {
-    console.error('❌ Lỗi khi tạo phòng chat:', error);
-    Alert.alert('Lỗi', 'Không thể bắt đầu chat với người bán');
-  }
   };
 
-  const handleMakeOffer = () => {
-    if (!product) return;
-    Alert.alert(
-      'Make Offer',
-      `Make an offer for "${product.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Make Offer', onPress: () => console.log('Make offer for:', product.id) }
-      ]
-    );
+
+  const handleBuyNowConfirm = (addressData: any, shippingFee: number, totalAmount: number) => {
+    console.log('Purchase request data:', {
+      addressData,
+      shippingFee,
+      totalAmount
+    });
+    setShowBuyNowPopup(false);
+    setOrderUpdated(prev => prev + 1);
+    Alert.alert('Success', 'Purchase request sent successfully!');
   };
 
   const renderMediaContent = () => {
@@ -275,49 +281,46 @@ const ProductDetailScreen = () => {
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={true}
       >
-      <View style={styles.mediaSection}>
-        <View style={styles.mediaContainer}>
-          {renderMediaContent()}
-          
-          {/* Media Counter */}
-          {imageItems.length > 0 && (
-            <View style={styles.mediaCounter}>
-              <Text style={styles.mediaCounterText}>
-                {mediaIndex + 1} / {imageItems.length}
-              </Text>
-            </View>
+        <View style={styles.mediaSection}>
+          <View style={styles.mediaContainer}>
+            {renderMediaContent()}
+            
+            {imageItems.length > 0 && (
+              <View style={styles.mediaCounter}>
+                <Text style={styles.mediaCounterText}>
+                  {mediaIndex + 1} / {imageItems.length}
+                </Text>
+              </View>
+            )}
+          </View>
+          {imageItems.length > 1 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.thumbnailContainer}
+            >
+              {imageItems.map((image, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => setMediaIndex(index)}
+                  style={[
+                    styles.thumbnail,
+                    index === mediaIndex && styles.thumbnailActive
+                  ]}
+                >
+                  <Image
+                    source={{ uri: image }}
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
         </View>
-        {imageItems.length > 1 && (
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.thumbnailContainer}
-          >
-            {imageItems.map((image, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => setMediaIndex(index)}
-                style={[
-                  styles.thumbnail,
-                  index === mediaIndex && styles.thumbnailActive
-                ]}
-              >
-                <Image
-                  source={{ uri: image }}
-                  style={styles.thumbnailImage}
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-
 
         {renderVideoSection()}
 
-        {/* Main Product Info Section */}
         <View style={styles.mainInfoSection}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>{product.title || 'No Title'}</Text>
@@ -338,7 +341,6 @@ const ProductDetailScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Tags Section */}
           <View style={styles.tagsSection}>
             <View style={styles.tags}>
               <View style={styles.tag}>
@@ -356,7 +358,6 @@ const ProductDetailScreen = () => {
           </View>
         </View>
 
-        {/* Description Section */}
         <View style={styles.descriptionSection}>
           <Text style={styles.sectionTitle}>📝 Description</Text>
           <View style={styles.descriptionBox}>
@@ -364,7 +365,6 @@ const ProductDetailScreen = () => {
           </View>
         </View>
 
-        {/* Seller Information Section */}
         <View style={styles.sellerSection}>
           <Text style={styles.sectionTitle}>👤 Seller Information</Text>
           <View style={styles.sellerBox}>
@@ -382,7 +382,7 @@ const ProductDetailScreen = () => {
                 width:1,
                 height:60, 
                 backgroundColor: '#d5d5d5ff',
-              }}></View>           
+              }}></View>            
               <View style={styles.followButtonWrapper}>
                 <FollowButton 
                   targetUserId={product.sellerId}
@@ -396,7 +396,6 @@ const ProductDetailScreen = () => {
           </View>
         </View>
 
-        {/* Location Section */}
         <View style={styles.locationSection}>
           <Text style={styles.sectionTitle}>📍 Location</Text>
           <View style={styles.locationBox}>
@@ -407,7 +406,6 @@ const ProductDetailScreen = () => {
           </View>
         </View>
 
-        {/* Product Stats Section */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>📊 Product Stats</Text>
           <View style={styles.statsBox}>
@@ -433,25 +431,38 @@ const ProductDetailScreen = () => {
         <CommentSection productId={productId}/>
       </ScrollView>
 
-      {/* Action Buttons */}
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.contactButton}
-          onPress={handleContactSeller}>
-            
-          <Text style={styles.contactButtonText}
-          onPress={handleContactSeller} >
+          onPress={handleContactSeller}
+        >
+          <Text style={styles.contactButtonText}>
             💬 Contact Seller
           </Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.buyButton}
-          onPress={handleMakeOffer}
-        >
-          <Text style={styles.buyButtonText}>🛒 Make Offer</Text>
-        </TouchableOpacity>
+        <BuyButton
+          productId={product.id}
+          sellerId={product.sellerId}
+          onPress={() => setShowBuyNowPopup(true)}
+          disabled={product.status !== 'active' || user?.uid === product.sellerId}
+          refreshTrigger={orderUpdated}
+        />
       </View>
+
+      <BuyNow
+        visible={showBuyNowPopup}
+        product={product ? {
+          id: product.id,
+          title: product.title,
+          price: product.price,
+          images: product.images,
+          sellerId: product.sellerId,
+          sellerAddress: product.address,
+          productType: 'normal'
+        } : null}
+        onClose={() => setShowBuyNowPopup(false)}
+        onConfirm={handleBuyNowConfirm}
+      />
     </SafeAreaView>
   );
 };
@@ -554,7 +565,6 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // Video Section 
   videoSection: {
     backgroundColor: '#fff',
     padding: 16,
@@ -713,7 +723,6 @@ const styles = StyleSheet.create({
     color: '#333',
   },
 
-  // Seller Section
   sellerSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -754,8 +763,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   followButtonWrapper: {
-  width: SCREEN_WIDTH*0.15, 
-  alignItems: 'center',
+    width: SCREEN_WIDTH*0.15, 
+    alignItems: 'center',
   },
   locationSection: {
     backgroundColor: '#fff',
@@ -782,7 +791,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Stats Section
   statsSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -819,7 +827,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Footer
   footer: {
     position: 'absolute',
     bottom: 0,

@@ -13,6 +13,7 @@ export default function Profile(){
     const { user } = useAuth(); 
     const [selectedTab, setSelectedTab] = React.useState("Information");
     const [productSubTab, setProductSubTab] = React.useState("Products");
+    const [historySubTab, setHistorySubTab] = React.useState("Orders"); // Thêm state cho History sub-tab
     const [refreshKey, setRefreshKey] = React.useState(0);
     
     useFocusEffect(
@@ -51,11 +52,11 @@ export default function Profile(){
                 {selectedTab === "Information" && <PersonalInfo/>}
                 {selectedTab === "Product" && (
                     <View style={styles.productContainer}>
-                        <View style={styles.productSubTabBar}>
+                        <View style={styles.ProductsubTabBar}>
                             <TouchableOpacity 
                                 style={[
                                     styles.subTabButton, 
-                                    productSubTab === "Products" && styles.activeSubTab
+                                    productSubTab === "Products" && styles.activeProductSubTab
                                 ]} 
                                 onPress={() => setProductSubTab("Products")}
                             >
@@ -69,7 +70,7 @@ export default function Profile(){
                             <TouchableOpacity 
                                 style={[
                                     styles.subTabButton, 
-                                    productSubTab === "Auction" && styles.activeSubTab
+                                    productSubTab === "Auction" && styles.activeProductSubTab
                                 ]} 
                                 onPress={() => setProductSubTab("Auction")}
                             >
@@ -82,7 +83,7 @@ export default function Profile(){
                             </TouchableOpacity>
                         </View>
                         
-                        <View style={styles.productFeedContainer}>
+                        <View style={styles.feedContainer}>
                             {productSubTab === "Products" && (
                                 <ProductFeed 
                                     key={`normal-${refreshKey}`}
@@ -104,7 +105,57 @@ export default function Profile(){
                         </View>
                     </View>
                 )}
-                {selectedTab === "History" && <Text>You haven't buy any product!</Text>}
+                {selectedTab === "History" && (
+                    <View style={styles.historyContainer}>
+                        <View style={styles.historySubTabBar}>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.subTabButton, 
+                                    historySubTab === "Orders" && styles.activeHistorySubTab
+                                ]} 
+                                onPress={() => setHistorySubTab("Orders")}
+                            >
+                                <Text style={[
+                                    styles.subTabText,
+                                    historySubTab === "Orders" && styles.activeSubTabText
+                                ]}>
+                                     Orders
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.subTabButton, 
+                                    historySubTab === "Purchased" && styles.activeHistorySubTab
+                                ]} 
+                                onPress={() => setHistorySubTab("Purchased")}
+                            >
+                                <Text style={[
+                                    styles.subTabText,
+                                    historySubTab === "Purchased" && styles.activeSubTabText
+                                ]}>
+                                     Purchased
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.feedContainer}>
+                            {historySubTab === "Orders" && (
+                                <View style={styles.placeholderContainer}>
+                                    <Text style={styles.placeholderText}>
+                                        Your orders will appear here
+                                    </Text>
+                                </View>
+                            )}
+                            {historySubTab === "Purchased" && (
+                                <View style={styles.placeholderContainer}>
+                                    <Text style={styles.placeholderText}>
+                                        Your purchased items will appear here
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                )}
             </View>
         </SafeAreaView>
     );
@@ -142,12 +193,27 @@ const styles = StyleSheet.create({
         flex: 1,
         width: '100%',
     },
-    productSubTabBar: {
+    historyContainer: {
+        flex: 1,
+        width: '100%',
+    },
+    ProductsubTabBar: {
         flexDirection: 'row',
         height: 40,
         backgroundColor: '#f5f5f5',
-        borderBottomWidth: 1,
+        borderBottomWidth:2,
+        borderTopWidth: 2,
         borderBottomColor: '#e0e0e0',
+        borderTopColor: '#2cd53aff',
+    },
+    historySubTabBar: {
+        flexDirection: 'row',
+        height: 40,
+        backgroundColor: '#f5f5f5',
+        borderBottomWidth:2,
+        borderTopWidth: 2,
+        borderBottomColor: '#e0e0e0',
+        borderTopColor: '#ffbc58ff',
     },
     subTabButton: {
         flex: 1,
@@ -155,10 +221,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 10,
     },
-    activeSubTab: {
+    activeProductSubTab: {
         borderBottomWidth: 2,
         borderBottomColor: '#2cd53aff',
         backgroundColor: '#e3f4deff',
+    },
+    activeHistorySubTab: {
+        borderBottomWidth: 2,
+        borderBottomColor: '#ffbc58ff',
+        backgroundColor: '#f8f8e1ff',
     },
     subTabText: {
         fontSize: 14,
@@ -168,8 +239,19 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#000000ff',
     },
-    productFeedContainer: {
+    feedContainer: {
         flex: 1,
         width: '100%',
+    },
+    placeholderContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    placeholderText: {
+        fontSize: 16,
+        color: '#999',
+        textAlign: 'center',
     }
 });

@@ -18,10 +18,11 @@ import { getAuctionProductById } from '../../../services/Auction/auctionService'
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { auctionChatService } from '../../../services/Chat/auctionChatService';
 import { formatPrice } from '../../../services/Product/productService';
+import BuyButton from '../../components/BuyButton';
+import BuyNow from '../../components/BuyNow';
 import CommentSection from '../../components/CommentSection';
 import FollowButton from '../../components/FollowButton';
 import Header from '../../components/header_for_detail';
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AuctionDetail {
@@ -40,6 +41,9 @@ interface AuctionDetail {
     street?: string;
     ward?: string;
     fullAddress?: string;
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
   };
   sellerId: string;
   sellerName: string;
@@ -71,6 +75,8 @@ const AuctionDetailScreen = () => {
   const [videoRef, setVideoRef] = useState<any>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [isCountdownVisible, setIsCountdownVisible] = useState(true);
+  const [showBuyNowPopup, setShowBuyNowPopup] = useState(false);
+  const [orderUpdated, setOrderUpdated] = useState(0);
 
   const auctionId = params.id as string;
 
@@ -183,23 +189,9 @@ const AuctionDetailScreen = () => {
     };
 
     loadAuctionDetail();
-  }, [auctionId, router]);
+  }, [auctionId, router, orderUpdated]);
 
   const imageItems = auction?.images || [];
-
-  const handleBuyNow = () => {
-    if (!auction || !auction.auctionInfo.buyNowPrice) return;
-    
-    Alert.alert(
-      'Buy Now',
-      `Buy "${auction.title}" for ${formatPrice(auction.auctionInfo.buyNowPrice)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Buy Now', onPress: () => console.log('Buy now:', auction.id) }
-      ]
-    );
-  };
-
     const handleJoinAuction = async () => {
     if (!auction || !user) {
       Alert.alert('Notification', 'Please log in to join the auction');
@@ -245,6 +237,17 @@ const AuctionDetailScreen = () => {
       console.error('Error joining auction:', error);
       Alert.alert('Error', 'Cannot join auction room');
     }
+  };
+
+  const handleBuyNowConfirm = (addressData: any, shippingFee: number, totalAmount: number) => {
+    console.log('Purchase request data:', {
+      addressData,
+      shippingFee,
+      totalAmount
+    });
+    setShowBuyNowPopup(false);
+    setOrderUpdated(prev => prev + 1);
+    Alert.alert('Success', 'Purchase request sent successfully!');
   };
 
   const renderMediaContent = () => {
@@ -516,16 +519,33 @@ const AuctionDetailScreen = () => {
             🏷️ Join Auction
           </Text>
         </TouchableOpacity>
-        
-        {isAuctionActive && auction.auctionInfo.buyNowPrice && (
-          <TouchableOpacity 
-            style={styles.buyNowButton}
-            onPress={handleBuyNow}
-          >
-            <Text style={styles.buyNowButtonText}>⚡ Buy Now</Text>
-          </TouchableOpacity>
-        )}
+        <BuyButton
+          productId={auction.id}
+          sellerId={auction.sellerId}
+          onPress={() => setShowBuyNowPopup(true)}
+          disabled={
+            !isAuctionActive || 
+            !auction.auctionInfo.buyNowPrice || 
+            user?.uid === auction.sellerId
+          }
+          refreshTrigger={orderUpdated}
+        />
       </View>
+
+      <BuyNow
+        visible={showBuyNowPopup}
+        product={auction ? {
+          id: auction.id,
+          title: auction.title,
+          price: auction.auctionInfo.buyNowPrice || auction.startPrice,
+          images: auction.images,
+          sellerId: auction.sellerId,
+          sellerAddress: auction.address,
+          productType: 'auction'
+        } : null}
+        onClose={() => setShowBuyNowPopup(false)}
+        onConfirm={handleBuyNowConfirm}
+      />
     </SafeAreaView>
   );
 };

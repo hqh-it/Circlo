@@ -156,16 +156,15 @@ const AddProduct = ({
     loadUserAddress();
   }, [user]);
 
-  // QUAN TRỌNG: Xử lý initialData khi có địa chỉ từ sản phẩm cũ
+
   useEffect(() => {
     if (initialData?.address && isEditMode) {
       console.log('Processing initial address data:', initialData.address);
       
-      // Nếu địa chỉ có isAnotherAddress = true, xử lý địa chỉ tùy chỉnh
+     
       if (initialData.address.isAnotherAddress || initialData.address.useDefault === false) {
         setUseDefaultAddress(false);
         
-        // Set các giá trị địa chỉ tùy chỉnh
         setCustomStreet(initialData.address.street || initialData.address.specificAddress || '');
         setCustomProvince(initialData.address.provinceCode || '');
         setCustomDistrict(initialData.address.districtCode || '');
