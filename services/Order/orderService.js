@@ -11,8 +11,8 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
+import { notificationService } from '../Notification/notificationService';
 
-// Tạo order mới
 export const createOrder = async (orderData) => {
   try {
     const {
@@ -47,6 +47,13 @@ export const createOrder = async (orderData) => {
 
     const docRef = await addDoc(collection(db, 'orders'), order);
     
+    const createdOrder = {
+      id: docRef.id,
+      ...order
+    };
+
+    await notificationService.createOrderNotification(createdOrder, 'new_order');
+    
     return {
       success: true,
       orderId: docRef.id,
@@ -62,7 +69,6 @@ export const createOrder = async (orderData) => {
   }
 };
 
-// Lấy order by ID
 export const getOrderById = async (orderId) => {
   try {
     const orderDoc = await getDoc(doc(db, 'orders', orderId));
@@ -87,7 +93,6 @@ export const getOrderById = async (orderId) => {
   }
 };
 
-// Lấy orders của user (mua hoặc bán)
 export const getUserOrders = async (userId, type = 'buying') => {
   try {
     let field = type === 'buying' ? 'buyerId' : 'sellerId';
@@ -119,7 +124,6 @@ export const getUserOrders = async (userId, type = 'buying') => {
   }
 };
 
-// Cập nhật trạng thái order
 export const updateOrderStatus = async (orderId, newStatus) => {
   try {
     const orderRef = doc(db, 'orders', orderId);
@@ -129,7 +133,6 @@ export const updateOrderStatus = async (orderId, newStatus) => {
       updatedAt: serverTimestamp()
     };
     
-    // Thêm timestamp cho các trạng thái đặc biệt
     if (newStatus === 'accepted') {
       updateData.acceptedAt = serverTimestamp();
     } else if (newStatus === 'rejected') {
@@ -139,6 +142,12 @@ export const updateOrderStatus = async (orderId, newStatus) => {
     }
     
     await updateDoc(orderRef, updateData);
+
+    const orderResult = await getOrderById(orderId);
+    if (orderResult.success) {
+      const notificationType = `order_${newStatus}`;
+      await notificationService.createOrderNotification(orderResult.order, notificationType);
+    }
     
     return {
       success: true,
@@ -154,7 +163,6 @@ export const updateOrderStatus = async (orderId, newStatus) => {
   }
 };
 
-// Kiểm tra order đã tồn tại chưa
 export const checkExistingOrder = async (productId, buyerId) => {
   try {
     const q = query(
@@ -190,7 +198,6 @@ export const checkExistingOrder = async (productId, buyerId) => {
   }
 };
 
-// Hủy order
 export const cancelOrder = async (orderId, userId) => {
   try {
     const orderResult = await getOrderById(orderId);
@@ -201,7 +208,6 @@ export const cancelOrder = async (orderId, userId) => {
     
     const order = orderResult.order;
     
-    // Chỉ buyer mới được hủy order pending
     if (order.buyerId !== userId) {
       return { success: false, error: 'Only buyer can cancel this order' };
     }
@@ -210,10 +216,85 @@ export const cancelOrder = async (orderId, userId) => {
       return { success: false, error: 'Only pending orders can be cancelled' };
     }
     
-    return await updateOrderStatus(orderId, 'cancelled');
+    const result = await updateOrderStatus(orderId, 'cancelled');
+    
+    if (result.success) {
+      await notificationService.createOrderNotification(order, 'order_cancelled');
+    }
+    
+    return result;
     
   } catch (error) {
     console.error('Error cancelling order:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// New function for accepting order with payment information
+export const acceptOrderWithPayment = async (orderId, sellerNote, paymentPercentage, sellerBankAccount) => {
+  try {
+    const orderRef = doc(db, 'orders', orderId);
+    
+    const updateData = {
+      status: 'waiting_payment',
+      sellerNote: sellerNote,
+      paymentPercentage: paymentPercentage || 50,
+      sellerBankAccount: sellerBankAccount,
+      paymentStatus: 'pending',
+      updatedAt: serverTimestamp(),
+      acceptedAt: serverTimestamp()
+    };
+    
+    await updateDoc(orderRef, updateData);
+
+    const orderResult = await getOrderById(orderId);
+    if (orderResult.success) {
+      await notificationService.createOrderNotification(orderResult.order, 'order_accepted_with_payment');
+    }
+    
+    return {
+      success: true,
+      message: 'Order accepted successfully! Payment request sent to buyer.'
+    };
+    
+  } catch (error) {
+    console.error('Error accepting order with payment:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Additional function to get orders by status
+export const getOrdersByStatus = async (userId, status, type = 'buying') => {
+  try {
+    let field = type === 'buying' ? 'buyerId' : 'sellerId';
+    
+    const q = query(
+      collection(db, 'orders'),
+      where(field, '==', userId),
+      where('status', '==', status),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const orders = [];
+    
+    querySnapshot.forEach((doc) => {
+      orders.push({ id: doc.id, ...doc.data() });
+    });
+    
+    return {
+      success: true,
+      orders
+    };
+    
+  } catch (error) {
+    console.error('Error getting orders by status:', error);
     return {
       success: false,
       error: error.message

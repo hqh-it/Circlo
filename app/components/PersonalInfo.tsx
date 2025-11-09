@@ -17,7 +17,6 @@ import { banksData } from "../../services/User/bankData";
 import { getFollowCounts } from "../../services/User/followService";
 import { deleteBankAccount, loadUserProfile, setDefaultBankAccount } from "../../services/User/userService";
 import AddBank from "../components/AddBank";
-
 const { width } = Dimensions.get("window");
 
 interface BankAccount {
@@ -175,6 +174,7 @@ export default function PersonalInfo() {
 
   return (
     <View style={styles.container}>
+      {/* Header Section */}
       <View style={styles.headerSection}>
         <ImageBackground 
           source={require('../assets/images/background_profile.jpg')} 
@@ -189,216 +189,253 @@ export default function PersonalInfo() {
               }
               style={styles.avatar}
             />
-          </View>
-          
-          <View style={styles.followContainer}>
-            <View style={styles.followColumn}>
-              <Image 
-                style={styles.followIcon} 
-                source={require('../assets/icons/follower.png')} 
-              />
-              <Text style={styles.followText}>
-                Followers: {followCounts.followerCount}
-              </Text>
-            </View>
             
-            <TouchableOpacity 
-              onPress={() => router.push('/screens/Profile/FollowListScreen')}
-            >
+            <View style={styles.followContainer}>
               <View style={styles.followColumn}>
                 <Image 
                   style={styles.followIcon} 
-                  source={require('../assets/icons/following.png')} 
+                  source={require('../assets/icons/follower.png')} 
                 />
                 <Text style={styles.followText}>
-                  Following: {followCounts.followingCount}
+                  Followers: {followCounts.followerCount}
                 </Text>
               </View>
-            </TouchableOpacity>
-          </View>
-        </ImageBackground>
-      </View>
-
-      <ScrollView style={styles.contentScrollView}>
-        <View style={styles.contentContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Information</Text>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => router.push("/screens/Profile/EditProfile")}
-            >
-              <Image 
-                source={require('../assets/icons/edit.png')}
-                style={styles.editIcon}
-              />
-              <Text style={styles.editText}>Edit Profile</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.cardTitle}>👤 Basic Information</Text>
-  
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Full Name:</Text>
-              <Text style={styles.infoValue}>
-                {displayValue(userData?.fullName)}
-              </Text>
-            </View>
-            
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Email:</Text>
-              <Text style={styles.infoValue}>
-                {displayValue(userData?.email)}
-              </Text>
-            </View>
-            
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Phone:</Text>
-              <Text style={styles.infoValue}>
-                {displayValue(userData?.phone)}
-              </Text>
-            </View>
-          </View>
-
-          {(userData?.address?.street || userData?.address?.province || userData?.address?.district || userData?.address?.ward) ? (
-            <View style={styles.addressCard}>
-              <Text style={styles.cardTitle}>📍 Address Information</Text>
-  
-              {userData.address.street && (
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Street:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData.address.street)}
-                  </Text>
-                </View>
-              )}
               
-              {userData.address.ward && (
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Ward:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData.address.ward)}
-                  </Text>
-                </View>
-              )}
-              
-              {userData.address.district && (
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>District:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData.address.district)}
-                  </Text>
-                </View>
-              )}
-              
-              {userData.address.province && (
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Province:</Text>
-                  <Text style={styles.infoValue}>
-                    {displayValue(userData.address.province)}
-                  </Text>
-                </View>
-              )}
-              
-              {userData.address.fullAddress && (
-                <View style={styles.fullAddressSection}>
-                  <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
-                  <Text style={styles.fullAddressText}>
-                    {userData.address.fullAddress}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.noDataCard}>
-              <Text style={styles.noDataText}>📍 No address information added yet</Text>
-              <Text style={styles.noDataSubtext}>
-                Click "Edit Profile" to add your address
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.bankCard}>
-            <View style={styles.bankHeader}>
-              <Text style={styles.cardTitle}>💳 Bank Accounts</Text>
               <TouchableOpacity 
-                style={styles.addBankButton}
-                onPress={() => {
-                  setEditingBank(null);
-                  setShowAddBankModal(true);
-                }}
+                onPress={() => router.push('/screens/Profile/FollowListScreen')}
               >
-                <Text style={styles.addBankText}>+ Add Bank</Text>
+                <View style={[styles.followColumn, { 
+                  backgroundColor: 'green',
+                  borderRadius: 10
+                }]}>
+                  <Image 
+                    style={styles.followIcon} 
+                    source={require('../assets/icons/following.png')} 
+                  />
+                  <Text style={styles.followText}>
+                    Following: {followCounts.followingCount}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
+          </View>
 
-            {userData?.bankAccounts && userData.bankAccounts.length > 0 ? (
-              userData.bankAccounts.map((account) => {
-                const bankLogo = getBankLogo(account.bankCode);
-                return (
-                  <View key={account.id} style={styles.bankAccountItem}>
-                    {bankLogo && (
-                      <Image 
-                        source={{ uri: bankLogo }} 
-                        style={styles.bankLogo}
-                        resizeMode="contain"
-                      />
-                    )}
-                    
-                    <View style={styles.bankAccountInfo}>
-                      <Text style={styles.bankName}>{account.bankName}</Text>
-                      <Text style={styles.accountNumber}>
-                        Account: {account.accountNumber}
-                      </Text>
-                      <Text style={styles.accountHolder}>
-                        Holder: {account.accountHolder}
-                      </Text>
-                    </View>
+        {/* Order Bar */}
+        <View style={styles.orderBar}>
+          <TouchableOpacity 
+            onPress={() => router.push('/screens/Order_Selling/OrderScreen')}
+          >
+            <View style={styles.orderColumn}>
+              <Image
+                style={styles.orderIcon}
+                source={require('../assets/icons/order.png')}
+              />
+              <Text style={styles.orderText}>
+                Your Orders
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={() => router.push('/screens/Order_Selling/SellingScreen')}
+          >
+            <View style={styles.orderColumn}>
+              <Image 
+                style={styles.orderIcon} 
+                source={require('../assets/icons/sell.png')} 
+              />
+              <Text style={styles.orderText}>
+                Your Selling
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        </ImageBackground>
+      </View>
+      <ImageBackground 
+        source={require('../assets/images/profile_background.jpg')} 
+        style={styles.contentBackground}
+        resizeMode="cover"
+      >
+        <ScrollView style={styles.contentScrollView}>
+          <View style={styles.contentContainer}>
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>👤 Basic Information</Text>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={() => router.push("/screens/Profile/EditProfile")}
+                >
+                  <Image 
+                    source={require('../assets/icons/edit.png')}
+                    style={styles.editIcon}
+                  />
+                  <Text style={styles.editText}>Edit Profile</Text>
+                </TouchableOpacity>
+              </View>
+    
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Full Name:</Text>
+                <Text style={styles.infoValue}>
+                  {displayValue(userData?.fullName)}
+                </Text>
+              </View>
+              
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Email:</Text>
+                <Text style={styles.infoValue}>
+                  {displayValue(userData?.email)}
+                </Text>
+              </View>
+              
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Phone:</Text>
+                <Text style={styles.infoValue}>
+                  {displayValue(userData?.phone)}
+                </Text>
+              </View>
+            </View>
 
-                    <View style={styles.bankActions}>
-                      <TouchableOpacity 
-                        style={[
-                          styles.defaultButton, 
-                          account.isDefault ? styles.defaultButtonActive : styles.defaultButtonInactive
-                        ]}
-                        onPress={() => handleSetDefault(account.id)}
-                      >
-                        <Text style={[
-                          styles.defaultButtonText,
-                          account.isDefault ? styles.defaultButtonTextActive : styles.defaultButtonTextInactive
-                        ]}>
-                          Default
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity 
-                        style={styles.editBankButton}
-                        onPress={() => handleEditBank(account)}
-                      >
-                        <Text style={styles.editButtonText}>Edit</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity 
-                        style={styles.deleteButton}
-                        onPress={() => handleDeleteBank(account)}
-                      >
-                        <Text style={styles.deleteButtonText}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
+            {(userData?.address?.street || userData?.address?.province || userData?.address?.district || userData?.address?.ward) ? (
+              <View style={styles.addressCard}>
+                <Text style={styles.cardTitle}>📍 Address Information</Text>
+    
+                {userData.address.street && (
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>Street:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.address.street)}
+                    </Text>
                   </View>
-                );
-              })
+                )}
+                
+                {userData.address.ward && (
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>Ward:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.address.ward)}
+                    </Text>
+                  </View>
+                )}
+                
+                {userData.address.district && (
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>District:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.address.district)}
+                    </Text>
+                  </View>
+                )}
+                
+                {userData.address.province && (
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoLabel}>Province:</Text>
+                    <Text style={styles.infoValue}>
+                      {displayValue(userData.address.province)}
+                    </Text>
+                  </View>
+                )}
+                
+                {userData.address.fullAddress && (
+                  <View style={styles.fullAddressSection}>
+                    <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
+                    <Text style={styles.fullAddressText}>
+                      {userData.address.fullAddress}
+                    </Text>
+                  </View>
+                )}
+              </View>
             ) : (
-              <View style={styles.noBankCard}>
-                <Text style={styles.noBankText}>🏦 You have no bank account yet</Text>
-                <Text style={styles.noBankSubtext}>
-                  Add your bank account to receive payments from buyers
+              <View style={styles.noDataCard}>
+                <Text style={styles.noDataText}>📍 No address information added yet</Text>
+                <Text style={styles.noDataSubtext}>
+                  Click "Edit Profile" to add your address
                 </Text>
               </View>
             )}
+
+            <View style={styles.bankCard}>
+              <View style={styles.bankHeader}>
+                <Text style={styles.cardTitle}>💳 Bank Accounts</Text>
+                <TouchableOpacity 
+                  style={styles.addBankButton}
+                  onPress={() => {
+                    setEditingBank(null);
+                    setShowAddBankModal(true);
+                  }}
+                >
+                  <Text style={styles.addBankText}>+ Add Bank</Text>
+                </TouchableOpacity>
+              </View>
+
+              {userData?.bankAccounts && userData.bankAccounts.length > 0 ? (
+                userData.bankAccounts.map((account) => {
+                  const bankLogo = getBankLogo(account.bankCode);
+                  return (
+                    <View key={account.id} style={styles.bankAccountItem}>
+                      {bankLogo && (
+                        <Image 
+                          source={{ uri: bankLogo }} 
+                          style={styles.bankLogo}
+                          resizeMode="contain"
+                        />
+                      )}
+                      
+                      <View style={styles.bankAccountInfo}>
+                        <Text style={styles.bankName}>{account.bankName}</Text>
+                        <Text style={styles.accountNumber}>
+                          Account: {account.accountNumber}
+                        </Text>
+                        <Text style={styles.accountHolder}>
+                          Holder: {account.accountHolder}
+                        </Text>
+                      </View>
+
+                      <View style={styles.bankActions}>
+                        <TouchableOpacity 
+                          style={[
+                            styles.defaultButton, 
+                            account.isDefault ? styles.defaultButtonActive : styles.defaultButtonInactive
+                          ]}
+                          onPress={() => handleSetDefault(account.id)}
+                        >
+                          <Text style={[
+                            styles.defaultButtonText,
+                            account.isDefault ? styles.defaultButtonTextActive : styles.defaultButtonTextInactive
+                          ]}>
+                            Default
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.editBankButton}
+                          onPress={() => handleEditBank(account)}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.deleteButton}
+                          onPress={() => handleDeleteBank(account)}
+                        >
+                          <Text style={styles.deleteButtonText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              ) : (
+                <View style={styles.noBankCard}>
+                  <Text style={styles.noBankText}>🏦 You have no bank account yet</Text>
+                  <Text style={styles.noBankSubtext}>
+                    Add your bank account to receive payments from buyers
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </ImageBackground>
 
       <View style={styles.footerSection}>
         <TouchableOpacity 
@@ -434,84 +471,88 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   avatarContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
   },
   avatar: {
-    width: width * 0.35,
-    height: width * 0.35,
-    borderRadius: 100,
-    borderWidth: 5,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
     borderColor: "#D4A017",
   },
   followContainer: {
-    width: width,
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    paddingVertical: 5,
-    backgroundColor: "#f1aa05d5",
-    borderBottomWidth: 5,
-    borderColor: "white",
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
   followColumn: {
-    flexDirection: "column",
-    marginVertical: 2,
-    alignItems: "center",
-    justifyContent: "center"
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   followIcon: {
-    width: width * 0.05,
-    height: width * 0.05,  
+    width: 15,
+    height: 15,
+    marginRight: 8,
+    tintColor: '#ffffffff'
   },
   followText: {
     fontSize: 12,
     fontWeight: '500',
+    color: '#ffffffff',
+  },
+  orderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: "#f1aa05d5",
+    borderBottomWidth: 3,
+    borderColor: "white",
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  orderColumn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  orderIcon: {
+    width: 15,
+    height: 15,
+  },
+  orderText: {
+    fontSize: 12,
+    fontWeight: '500',
     color: '#333',
-    marginTop: 2,
+    marginTop: 4,
+  },
+  contentBackground: {
+    flex: 1,
+    width: '100%',
   },
   contentScrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 15,
     paddingBottom: 20,
+    paddingTop: 10,
   },
-  sectionHeader: {
-    width: width,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical:5,
-    backgroundColor: '#f5f5f5',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  editButton: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingRight:25
-  },
-  editIcon: {
-    width: width * 0.03,
-    height: width * 0.03,
-    marginBottom: 2,
-  },
-  editText: {
-    fontSize: 12,
-    color: "#00A86B",
-    fontWeight: "600",
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   infoCard: {
-    width: "100%",
-    marginVertical: 10,
+    marginVertical: 8,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#00A86B',
@@ -522,10 +563,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   addressCard: {
-    width: "100%",
-    marginVertical: 10,
+    marginVertical: 8,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#00A86B',
@@ -536,10 +576,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   bankCard: {
-    width: "100%",
-    marginVertical: 10,
+    marginVertical: 8,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#00A86B',
@@ -550,10 +589,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   noDataCard: {
-    width: "100%",
-    marginVertical: 10,
+    marginVertical: 8,
     padding: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(248, 249, 250, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#e9ecef',
@@ -563,8 +601,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#00A86B',
-    marginBottom: 12,
-    textAlign: 'center',
+  },
+  editButton: {
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editIcon: {
+    width: 10,
+    height: 10,
+    marginBottom: 4,
+  },
+  editText: {
+    fontSize: 10,
+    color: "#00A86B",
+    fontWeight: "600",
   },
   infoSection: {
     flexDirection: 'row',
@@ -639,7 +690,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(248, 249, 250, 0.95)',
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
@@ -727,7 +778,7 @@ const styles = StyleSheet.create({
   },
   noBankCard: {
     padding: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(248, 249, 250, 0.95)',
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#e9ecef',

@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuth } from "../../services/Auth/AuthContext";
 import { chatService } from "../../services/Chat/chatService";
+import { notificationService } from "../../services/Notification/notificationService";
 
 const { height, width } = Dimensions.get("window");
 
@@ -16,29 +17,73 @@ interface AppFooterProps {
 export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFooterProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [showAddOptions, setShowAddOptions] = useState(false);
 
-  const loadUnreadCount = async () => {
+  // Real-time listeners
+  useEffect(() => {
+    if (!user) return;
+
+    let unsubscribeChat: (() => void) | undefined;
+    let unsubscribeNotification: (() => void) | undefined;
+
+    const setupRealtimeListeners = async () => {
+      try {
+        unsubscribeChat = await chatService.subscribeToUnreadMessagesCount(
+          user.uid,
+          (count: number) => {
+            setUnreadChatCount(count);
+          }
+        );
+
+        unsubscribeNotification = await notificationService.subscribeToUnreadCount(
+          user.uid,
+          (count: number) => {
+            setUnreadNotificationCount(count);
+          }
+        );
+      } catch (error) {
+        console.error('Error setting up real-time listeners:', error);
+        // Fallback to periodic loading if real-time fails
+        loadUnreadCounts();
+      }
+    };
+
+    setupRealtimeListeners();
+
+    // Cleanup listeners on unmount
+    return () => {
+      if (unsubscribeChat) {
+        unsubscribeChat();
+      }
+      if (unsubscribeNotification) {
+        unsubscribeNotification();
+      }
+    };
+  }, [user]);
+
+  const loadUnreadCounts = async () => {
     try {
       if (!user) return;
-      const count = await chatService.getUnreadMessagesCount(user.uid);
-      setUnreadCount(count);
+      
+      // Load unread chat messages count
+      const chatCount = await chatService.getUnreadMessagesCount(user.uid);
+      setUnreadChatCount(chatCount);
+      
+      // Load unread notifications count
+      const notificationCount = await notificationService.getUnreadCount(user.uid);
+      setUnreadNotificationCount(notificationCount);
     } catch (error) {
-      console.error('Error loading unread count:', error);
+      console.error('Error loading unread counts:', error);
     }
   };
-
-  useEffect(() => {
-    if (user) {
-      loadUnreadCount();
-    }
-  }, [user]);
 
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        loadUnreadCount();
+        // Refresh data when screen comes into focus as backup
+        loadUnreadCounts();
       }
     }, [user])
   );
@@ -53,6 +98,18 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
     if (onTabChange) {
       onTabChange('auction');
     }
+  };
+
+  const handleNotificationPress = () => {
+    // Reset notification count when user clicks on notification icon
+    setUnreadNotificationCount(0);
+    router.push('/screens/Notification/NotificationScreen');
+  };
+
+  const handleChatPress = () => {
+    // Reset chat count when user clicks on chat icon
+    setUnreadChatCount(0);
+    router.push("/screens/Chat/chatListScreen");
   };
 
   const handleAddPress = () => {
@@ -103,17 +160,26 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
 
         <View style={{ width: width * 0.01 }} />
 
-        <TouchableOpacity>
-          <Image style={styles.icon} source={require("../assets/icons/bell.png")} />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push("/screens/Chat/chatListScreen")}>
-          <View style={styles.chatIconContainer}>
-            <Image style={styles.icon} source={require("../assets/icons/chat.png")} />
-            {unreadCount > 0 && (
+        <TouchableOpacity onPress={handleNotificationPress}>
+          <View style={styles.iconContainer}>
+            <Image style={styles.icon} source={require("../assets/icons/bell.png")} />
+            {unreadNotificationCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleChatPress}>
+          <View style={styles.iconContainer}>
+            <Image style={styles.icon} source={require("../assets/icons/chat.png")} />
+            {unreadChatCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
                 </Text>
               </View>
             )}
@@ -190,7 +256,7 @@ const styles = StyleSheet.create({
     tintColor: '#FFD700',
     transform: [{ scale: 1.1 }],
   },
-  chatIconContainer: {
+  iconContainer: {
     position: 'relative',
   },
   badge: {

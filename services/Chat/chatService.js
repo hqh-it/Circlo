@@ -18,19 +18,10 @@ import {
   MessageType
 } from './chatTypes';
 
-/**
- * SERVICE CHÍNH CHO CHAT (CHỈ TEXT)
- */
 export const chatService = {
 
-  /**
-   * TẠO PHÒNG CHAT MỚI (hoặc lấy phòng đã tồn tại)
-   */
   createOrGetChannel: async (createData) => {
     try {
-      console.log('🔍 Tìm phòng chat đã tồn tại...');
-      
-      // Tìm phòng chat đã tồn tại giữa 2 người
       const channelsRef = collection(db, 'channels');
       const q = query(
         channelsRef,
@@ -39,21 +30,25 @@ export const chatService = {
       );
       
       const snapshot = await getDocs(q);
-      
-      // Kiểm tra xem có phòng chat nào có cả 2 người không
+
       let existingChannel = null;
       snapshot.forEach(doc => {
         const channelData = doc.data();
+        
         const hasBothParticipants = createData.participants.every(participant => 
           channelData.participants.includes(participant)
         );
-        if (hasBothParticipants && channelData.participants.length === 2) {
+        
+        const hasSameProduct = channelData.productId === createData.productId;
+        
+        if (hasBothParticipants && 
+            channelData.participants.length === 2 && 
+            hasSameProduct) {
           existingChannel = { id: doc.id, ...channelData };
         }
       });
 
       if (existingChannel) {
-        console.log('✅ Phòng chat đã tồn tại:', existingChannel.id);
         return {
           success: true,
           channelId: existingChannel.id,
@@ -62,7 +57,6 @@ export const chatService = {
         };
       }
 
-      console.log('🆕 Tạo phòng chat mới...');
       const docRef = await addDoc(collection(db, 'channels'), {
         participants: createData.participants,
         participantDetails: createData.participantDetails,
@@ -75,7 +69,6 @@ export const chatService = {
         updatedAt: serverTimestamp()
       });
 
-      console.log('✅ Phòng chat mới tạo:', docRef.id);
       return {
         success: true,
         channelId: docRef.id,
@@ -89,7 +82,7 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('❌ Lỗi tạo phòng chat:', error);
+      console.error('Error creating channel:', error);
       return {
         success: false,
         error: error.message
@@ -97,25 +90,18 @@ export const chatService = {
     }
   },
 
-  /**
-   * GỬI TIN NHẮN TEXT
-   */
   sendTextMessage: async (channelId, senderId, content) => {
     try {
-      console.log('📤 Gửi tin nhắn...');
-      
-      // Thêm tin nhắn vào collection messages
       const messageRef = await addDoc(collection(db, 'messages'), {
         channelId: channelId,
         senderId: senderId,
         content: content,
         type: MessageType.TEXT,
         timestamp: serverTimestamp(),
-        readBy: [senderId], // Người gửi đã đọc
+        readBy: [senderId],
         status: MessageStatus.SENT
       });
 
-      // Cập nhật last message trong channel
       const channelRef = doc(db, 'channels', channelId);
       await updateDoc(channelRef, {
         lastMessage: content,
@@ -123,14 +109,13 @@ export const chatService = {
         updatedAt: serverTimestamp()
       });
 
-      console.log('✅ Tin nhắn đã gửi:', messageRef.id);
       return {
         success: true,
         messageId: messageRef.id
       };
 
     } catch (error) {
-      console.error('❌ Lỗi gửi tin nhắn:', error);
+      console.error('Error sending message:', error);
       return {
         success: false,
         error: error.message
@@ -138,13 +123,8 @@ export const chatService = {
     }
   },
 
-  /**
-   * LẤY DANH SÁCH PHÒNG CHAT CỦA USER
-   */
   getUserChannels: async (userId) => {
     try {
-      console.log('📂 Lấy danh sách phòng chat của user:', userId);
-      
       const channelsRef = collection(db, 'channels');
       const q = query(
         channelsRef,
@@ -162,14 +142,13 @@ export const chatService = {
         });
       });
 
-      console.log(`✅ Tìm thấy ${channels.length} phòng chat`);
       return {
         success: true,
         channels: channels
       };
 
     } catch (error) {
-      console.error('❌ Lỗi lấy danh sách phòng chat:', error);
+      console.error('Error getting user channels:', error);
       return {
         success: false,
         error: error.message,
@@ -178,13 +157,45 @@ export const chatService = {
     }
   },
 
-  /**
-   * LẤY TIN NHẮN THEO CHANNEL (Realtime)
-   */
+  subscribeToUserChannels(userId, callback) {
+    try {
+      const channelsRef = collection(db, 'channels');
+      const q = query(
+        channelsRef,
+        where('participants', 'array-contains', userId),
+        orderBy('lastMessageAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const channels = [];
+        snapshot.forEach(doc => {
+          channels.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        callback({
+          success: true,
+          channels: channels
+        });
+      }, (error) => {
+        console.error('Error in channels subscription:', error);
+        callback({
+          success: false,
+          error: error.message,
+          channels: []
+        });
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up channels subscription:', error);
+      return () => {};
+    }
+  },
+
   getChannelMessages: (channelId, callback) => {
     try {
-      console.log('🔄 Lắng nghe tin nhắn từ channel:', channelId);
-      
       const messagesRef = collection(db, 'messages');
       const q = query(
         messagesRef,
@@ -192,7 +203,6 @@ export const chatService = {
         orderBy('timestamp', 'asc')
       );
 
-      // Realtime listener
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const messages = [];
         snapshot.forEach(doc => {
@@ -202,13 +212,12 @@ export const chatService = {
           });
         });
         
-        console.log(`📨 Nhận ${messages.length} tin nhắn`);
         callback({
           success: true,
           messages: messages
         });
       }, (error) => {
-        console.error('❌ Lỗi lắng nghe tin nhắn:', error);
+        console.error('Error in messages listener:', error);
         callback({
           success: false,
           error: error.message,
@@ -219,20 +228,18 @@ export const chatService = {
       return unsubscribe;
 
     } catch (error) {
-      console.error('❌ Lỗi setup listener:', error);
+      console.error('Error setting up messages listener:', error);
       callback({
         success: false,
         error: error.message,
         messages: []
       });
-      return () => {}; // Return empty function
+      return () => {};
     }
   },
 
   markMessagesAsRead: async (channelId, userId) => {
     try {
-      console.log('👀 Đánh dấu tin nhắn đã đọc...');
-      
       const messagesRef = collection(db, 'messages');
       const q = query(
         messagesRef,
@@ -246,11 +253,9 @@ export const chatService = {
         const messageData = document.data();
         const messageId = document.id;
         
-        // Chỉ đánh dấu tin nhắn của người khác và chưa đọc
         if (messageData.senderId !== userId && 
             (!messageData.readBy || !messageData.readBy.includes(userId))) {
           
-          // SỬA DÒNG NÀY - đảm bảo import doc đúng cách
           const messageRef = doc(db, 'messages', messageId);
           const updatedReadBy = messageData.readBy ? 
             [...messageData.readBy, userId] : [userId];
@@ -266,15 +271,12 @@ export const chatService = {
 
       if (updatePromises.length > 0) {
         await Promise.all(updatePromises);
-        console.log(`✅ Đã đánh dấu ${updatePromises.length} tin nhắn đã đọc`);
-      } else {
-        console.log('ℹ️ Không có tin nhắn nào cần đánh dấu đã đọc');
       }
       
       return { success: true };
 
     } catch (error) {
-      console.error('❌ Lỗi đánh dấu tin nhắn đã đọc:', error);
+      console.error('Error marking messages as read:', error);
       return {
         success: false,
         error: error.message
@@ -284,8 +286,6 @@ export const chatService = {
 
   getUnreadMessagesCount: async (userId) => {
     try {
-      console.log('🔍 Đếm tin nhắn chưa đọc cho user:', userId);
-      
       const channelsResult = await chatService.getUserChannels(userId);
       let totalUnread = 0;
 
@@ -310,21 +310,63 @@ export const chatService = {
         });
         
         totalUnread += channelUnread;
-        console.log(`📊 Channel ${channel.id}: ${channelUnread} tin nhắn chưa đọc`);
       }
       
-      console.log(`✅ Tổng tin nhắn chưa đọc: ${totalUnread}`);
       return totalUnread;
       
     } catch (error) {
-      console.error('❌ Lỗi đếm tin nhắn chưa đọc:', error);
+      console.error('Error getting unread messages count:', error);
       return 0;
     }
   },
 
-  /**
-   * LẤY THÔNG TIN CHANNEL THEO ID
-   */
+  subscribeToUnreadMessagesCount(userId, callback) {
+    try {
+      const channelsRef = collection(db, 'channels');
+      const q = query(
+        channelsRef,
+        where('participants', 'array-contains', userId)
+      );
+
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        let totalUnread = 0;
+        
+        for (const doc of snapshot.docs) {
+          const channel = doc.data();
+          const messagesRef = collection(db, 'messages');
+          const messagesQuery = query(
+            messagesRef,
+            where('channelId', '==', doc.id),
+            orderBy('timestamp', 'desc')
+          );
+          
+          const messagesSnapshot = await getDocs(messagesQuery);
+          
+          let channelUnread = 0;
+          messagesSnapshot.forEach(messageDoc => {
+            const messageData = messageDoc.data();
+            if (messageData.senderId !== userId && 
+                (!messageData.readBy || !messageData.readBy.includes(userId))) {
+              channelUnread++;
+            }
+          });
+          
+          totalUnread += channelUnread;
+        }
+        
+        callback(totalUnread);
+      }, (error) => {
+        console.error('Error in unread messages count subscription:', error);
+        callback(0);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up unread messages count subscription:', error);
+      return () => {};
+    }
+  },
+
   getChannelById: async (channelId) => {
     try {
       const channelDoc = await getDoc(doc(db, 'channels', channelId));
@@ -343,5 +385,3 @@ export const chatService = {
   }
   
 };
-
-export default chatService;
