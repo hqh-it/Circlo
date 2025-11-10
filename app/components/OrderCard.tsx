@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../services/Auth/AuthContext';
 import { chatService } from '../../services/Chat/chatService';
+import { DeliveryService } from '../../services/Delivery/deliveryService';
 import { acceptOrderWithPayment, cancelOrder, updateOrderStatus } from '../../services/Order/orderService';
 import { formatPrice } from '../../services/Product/productService';
 import AcceptOrderModal from '../components/AcceptOrderModal';
@@ -23,9 +24,10 @@ interface ProductSnapshot {
   category: string;
 }
 
-interface BuyerAddress {
+interface Address {
   street: string;
   province: string;
+  provinceCode?: string;
   district: string;
   ward: string;
   fullAddress: string;
@@ -41,22 +43,31 @@ interface BankAccount {
   isDefault?: boolean;
 }
 
+interface WinnerInfo {
+  uid: string;
+  displayName: string;
+  avatarURL?: string;
+}
+
 interface Order {
   id: string;
   productId: string;
   sellerId: string;
   buyerId: string;
   productSnapshot: ProductSnapshot;
-  buyerAddress: BuyerAddress;
+  buyerAddress: Address;
+  sellerAddress?: Address;
   shippingFee: number;
   totalAmount: number;
   status: 'pending' | 'accepted' | 'rejected' | 'completed' | 'cancelled' | 'waiting_payment';
   sellerBankAccount?: BankAccount;
   paymentPercentage?: number;
   sellerNote?: string;
+  orderType?: 'normal' | 'auction';
+  auctionId?: string;
+  winnerInfo?: WinnerInfo;
   createdAt: any;
   updatedAt: any;
-  expiresAt: any;
 }
 
 interface OrderCardProps {
@@ -67,16 +78,42 @@ interface OrderCardProps {
 const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const [loading, setLoading] = React.useState(false);
-  const [contactLoading, setContactLoading] = React.useState(false);
+  const [loading, setLoading] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
   const [showAcceptModal, setShowAcceptModal] = useState(false);
-  const [userBankAccounts, setUserBankAccounts] = useState<BankAccount[]>([]);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+  const [calculatedShippingFee, setCalculatedShippingFee] = useState(order.shippingFee);
+
+  useEffect(() => {
+    if (order.orderType === 'auction' && order.sellerAddress && order.buyerAddress) {
+      calculateShippingFee();
+    }
+  }, [order]);
+
+  const calculateShippingFee = () => {
+    if (!order.sellerAddress || !order.buyerAddress) return;
+
+    try {
+      const shippingResult = DeliveryService.calculateShippingFee(
+        order.sellerAddress,
+        order.buyerAddress
+      );
+      
+      if (shippingResult.success) {
+        setCalculatedShippingFee(shippingResult.shippingFee);
+      }
+    } catch (error) {
+      console.error('Error calculating shipping fee:', error);
+    }
+  };
 
   if (!user) return null;
 
   const isBuyer = order.buyerId === user.uid;
   const isSeller = order.sellerId === user.uid;
+  const isAuctionOrder = order.orderType === 'auction';
+  const finalShippingFee = isAuctionOrder ? calculatedShippingFee : order.shippingFee;
+  const finalTotalAmount = isAuctionOrder ? order.totalAmount + finalShippingFee : order.totalAmount;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -164,31 +201,14 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   };
 
   const handleContact = async () => {
-    if (!user) {
-      Alert.alert('Notification', 'Please log in to your account for chat');
-      return;
-    }
+    if (!user) return;
 
     setContactLoading(true);
     try {
-      console.log('🔄 Starting create/find chat room...');
-      
       const targetUserId = isBuyer ? order.sellerId : order.buyerId;
       
       const createData = {
         participants: [user.uid, targetUserId],
-        
-        participantDetails: {
-          [user.uid]: {
-            name: user.displayName || 'You', 
-            avatar: user.photoURL || ''
-          },
-          [targetUserId]: {
-            name: isBuyer ? 'Seller' : 'Buyer',
-            avatar: ''
-          }
-        },
-
         productId: order.productId,
         productInfo: {
           id: order.productId,
@@ -203,8 +223,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
       const result = await chatService.createOrGetChannel(createData);
       
       if (result.success) {
-        console.log('✅ Chat room:', result.channelId);
-
         const productInfo = {
           id: order.productId,
           title: order.productSnapshot.title,
@@ -221,36 +239,21 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
           }
         });
       } else {
-        Alert.alert('Error', 'Cannot create chat room: ' + result.error);
+        Alert.alert('Error', 'Cannot create chat room');
       }
     } catch (error) {
-      console.error('❌ Error creating chat room:', error);
+      console.error('Error creating chat room:', error);
       Alert.alert('Error', 'Cannot start chat');
     } finally {
       setContactLoading(false);
     }
   };
 
-  const handleDeleteOrder = () => {
-    Alert.alert(
-      'Delete Order',
-      'Are you sure you want to delete this order?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: () => handleAction('cancel')
-        }
-      ]
-    );
-  };
-
   const copyToClipboard = async (text: string) => {
     try {
       const { Clipboard } = require('react-native');
       await Clipboard.setString(text);
-      Alert.alert('Success', 'Account number copied to clipboard');
+      Alert.alert('Success', 'Copied to clipboard');
     } catch (error) {
       Alert.alert('Error', 'Failed to copy to clipboard');
     }
@@ -258,18 +261,12 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
 
   const formatAccountNumber = (accountNumber: string) => {
     if (accountNumber.length <= 4) return accountNumber;
-    const visiblePart = accountNumber.slice(-4);
-    const hiddenPart = '*'.repeat(accountNumber.length - 4);
-    return `${hiddenPart}${visiblePart}`;
+    return `****${accountNumber.slice(-4)}`;
   };
 
   const renderPaymentInfo = () => {
-    if (!isBuyer || !order.sellerBankAccount) {
-      return null;
-    }
+    if (!isBuyer || !order.sellerBankAccount) return null;
 
-    const sellerBankAccount = order.sellerBankAccount;
-    
     return (
       <View style={styles.paymentSection}>
         <TouchableOpacity 
@@ -286,21 +283,27 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
           <View style={styles.paymentContent}>
             <View style={styles.bankInfo}>
               <Text style={styles.bankTitle}>Bank Details</Text>
-              <Text style={styles.bankText}>{sellerBankAccount.bankName}</Text>
+              <Text style={styles.bankText}>{order.sellerBankAccount.bankName}</Text>
               
               <View style={styles.accountRow}>
                 <Text style={styles.bankText}>
-                  Account: {formatAccountNumber(sellerBankAccount.accountNumber)}
+                  Account: {formatAccountNumber(order.sellerBankAccount.accountNumber)}
                 </Text>
                 <TouchableOpacity
                   style={styles.copyButton}
-                  onPress={() => copyToClipboard(sellerBankAccount.accountNumber)}
+                  onPress={() => copyToClipboard(order.sellerBankAccount!.accountNumber)}
                 >
                   <Text style={styles.copyButtonText}>Copy</Text>
                 </TouchableOpacity>
               </View>
               
-              <Text style={styles.bankText}>Holder: {sellerBankAccount.accountHolder}</Text>
+              <Text style={styles.bankText}>Holder: {order.sellerBankAccount.accountHolder}</Text>
+              
+              {order.paymentPercentage && (
+                <Text style={styles.paymentPercentage}>
+                  Advance Payment: {order.paymentPercentage}%
+                </Text>
+              )}
             </View>
 
             {order.sellerNote && (
@@ -311,6 +314,28 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
             )}
           </View>
         )}
+      </View>
+    );
+  };
+
+  const renderWinnerInfo = () => {
+    if (!isAuctionOrder || !order.winnerInfo) return null;
+
+    return (
+      <View style={styles.winnerSection}>
+        <Text style={styles.winnerTitle}>🏆 Auction Winner</Text>
+        <View style={styles.winnerInfoContainer}>
+          {order.winnerInfo.avatarURL && (
+            <Image
+              source={{ uri: order.winnerInfo.avatarURL }}
+              style={styles.winnerAvatar}
+            />
+          )}
+          <View style={styles.winnerDetails}>
+            <Text style={styles.winnerName}>{order.winnerInfo.displayName}</Text>
+            <Text style={styles.winnerId}>User ID: {order.winnerInfo.uid.slice(-8)}</Text>
+          </View>
+        </View>
       </View>
     );
   };
@@ -333,26 +358,17 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
       case 'accepted':
       case 'waiting_payment':
         return (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.contactButton]}
-              onPress={handleContact}
-              disabled={contactLoading}
-            >
-              {contactLoading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text style={styles.actionButtonText}>Contact Seller</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={handleDeleteOrder}
-              disabled={loading}
-            >
-              <Text style={styles.actionButtonText}>Delete Order</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.contactButton]}
+            onPress={handleContact}
+            disabled={contactLoading}
+          >
+            {contactLoading ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.actionButtonText}>Contact Seller</Text>
+            )}
+          </TouchableOpacity>
         );
       
       case 'completed':
@@ -375,17 +391,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
               )}
             </TouchableOpacity>
           </View>
-        );
-      
-      case 'rejected':
-      case 'cancelled':
-        return (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={handleDeleteOrder}
-          >
-            <Text style={styles.actionButtonText}>Delete Order</Text>
-          </TouchableOpacity>
         );
       
       default:
@@ -426,7 +431,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
               onPress={() => handleAction('complete')}
               disabled={loading}
             >
-              <Text style={styles.actionButtonText}>Mark Completed</Text>
+              <Text style={styles.actionButtonText}>Complete</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.contactButton]}
@@ -440,21 +445,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
               )}
             </TouchableOpacity>
           </View>
-        );
-      
-      case 'completed':
-        return (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.contactButton]}
-            onPress={handleContact}
-            disabled={contactLoading}
-          >
-            {contactLoading ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={styles.actionButtonText}>Contact Buyer</Text>
-            )}
-          </TouchableOpacity>
         );
       
       default:
@@ -482,11 +472,20 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.orderId}>Order #{order.id.slice(-8)}</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.orderId}>Order #{order.id.slice(-8)}</Text>
+          {isAuctionOrder && (
+            <View style={styles.auctionBadge}>
+              <Text style={styles.auctionBadgeText}>🏆 Auction</Text>
+            </View>
+          )}
+        </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
           <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
         </View>
       </View>
+
+      {renderWinnerInfo()}
 
       <View style={styles.productSection}>
         <Image
@@ -498,7 +497,8 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
             {order.productSnapshot.title}
           </Text>
           <Text style={styles.productPrice}>
-            {formatPrice(order.productSnapshot.price)}
+            {formatPrice(order.totalAmount)}
+            {isAuctionOrder && <Text style={styles.auctionPriceNote}> (Winning Bid)</Text>}
           </Text>
           <Text style={styles.productCondition}>
             Condition: {order.productSnapshot.condition}
@@ -508,13 +508,21 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
 
       <View style={styles.detailsSection}>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Total Amount:</Text>
+          <Text style={styles.detailLabel}>Product Price:</Text>
           <Text style={styles.detailValue}>{formatPrice(order.totalAmount)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Shipping Fee:</Text>
-          <Text style={styles.detailValue}>{formatPrice(order.shippingFee)}</Text>
+          <Text style={styles.detailValue}>{formatPrice(finalShippingFee)}</Text>
         </View>
+        {isAuctionOrder && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Total Amount:</Text>
+            <Text style={[styles.detailValue, styles.totalAmount]}>
+              {formatPrice(finalTotalAmount)}
+            </Text>
+          </View>
+        )}
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Delivery Address:</Text>
           <Text style={styles.detailValue} numberOfLines={2}>
@@ -543,7 +551,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
         onClose={() => setShowAcceptModal(false)}
         onAccept={handleAcceptWithPayment}
         order={order}
-        bankAccounts={userBankAccounts}
+        bankAccounts={[]}
         loading={loading}
       />
     </View>
@@ -565,13 +573,29 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  headerLeft: {
+    flex: 1,
   },
   orderId: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  auctionBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  auctionBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#8B7500',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -582,6 +606,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: 'white',
+  },
+  winnerSection: {
+    backgroundColor: '#fffdf0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  winnerTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#8B7500',
+    marginBottom: 8,
+  },
+  winnerInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  winnerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  winnerDetails: {
+    flex: 1,
+  },
+  winnerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  winnerId: {
+    fontSize: 12,
+    color: '#666',
   },
   productSection: {
     flexDirection: 'row',
@@ -608,6 +669,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#00A86B',
     marginBottom: 4,
+  },
+  auctionPriceNote: {
+    fontSize: 12,
+    color: '#FF6B35',
+    fontStyle: 'italic',
   },
   productCondition: {
     fontSize: 14,
@@ -636,6 +702,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 2,
     textAlign: 'right',
+  },
+  totalAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#00A86B',
   },
   paymentSection: {
     backgroundColor: '#f0f8ff',
@@ -681,6 +752,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginBottom: 4,
+  },
+  paymentPercentage: {
+    fontSize: 13,
+    color: '#00A86B',
+    fontWeight: '600',
+    marginTop: 4,
   },
   accountRow: {
     flexDirection: 'row',
@@ -746,9 +823,6 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#FF9500',
-  },
-  deleteButton: {
-    backgroundColor: '#8E8E93',
   },
   contactButton: {
     backgroundColor: '#5856D6',

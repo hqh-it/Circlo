@@ -23,6 +23,7 @@ export const createOrder = async (orderData) => {
       buyerAddress,
       shippingFee,
       totalAmount,
+      orderType = 'normal'
     } = orderData;
 
     const order = {
@@ -39,10 +40,11 @@ export const createOrder = async (orderData) => {
       buyerAddress, 
       shippingFee,
       totalAmount,
-      status: 'pending',
+      status: orderType === 'auction' ? 'waiting_payment' : 'pending',
+      orderType,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) 
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
     };
 
     const docRef = await addDoc(collection(db, 'orders'), order);
@@ -52,7 +54,11 @@ export const createOrder = async (orderData) => {
       ...order
     };
 
-    await notificationService.createOrderNotification(createdOrder, 'new_order');
+    if (orderType === 'auction') {
+      await notificationService.createOrderNotification(createdOrder, 'auction_won');
+    } else {
+      await notificationService.createOrderNotification(createdOrder, 'new_order');
+    }
     
     return {
       success: true,
@@ -66,6 +72,126 @@ export const createOrder = async (orderData) => {
       success: false,
       error: error.message
     };
+  }
+};
+
+export const createAuctionOrder = async (auctionData) => {
+  try {
+    const {
+      productId,
+      sellerId,
+      buyerId,
+      productSnapshot,
+      buyerAddress,
+      sellerAddress,
+      shippingFee,
+      totalAmount,
+      auctionId,
+      sellerBankAccount,
+      winnerInfo
+    } = auctionData;
+
+    // Kiểm tra kỹ order đã tồn tại chưa
+    const existingOrder = await checkExistingAuctionOrder(auctionId, productId, buyerId);
+    if (existingOrder.exists) {
+      console.log('🔄 Auction order already exists:', existingOrder.orderId);
+      return {
+        success: true,
+        orderId: existingOrder.orderId,
+        message: 'Auction order already exists'
+      };
+    }
+
+    const order = {
+      productId,
+      sellerId,
+      buyerId,
+      productSnapshot: {
+        title: productSnapshot.title,
+        price: productSnapshot.price,
+        images: productSnapshot.images,
+        condition: productSnapshot.condition || 'like_new',
+        category: 'auction'
+      },
+      buyerAddress,
+      sellerAddress,
+      shippingFee,
+      totalAmount,
+      status: 'waiting_payment',
+      orderType: 'auction',
+      auctionId,
+      sellerBankAccount,
+      paymentPercentage: 50,
+      paymentStatus: 'pending',
+      winnerInfo: winnerInfo,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
+
+    const docRef = await addDoc(collection(db, 'orders'), order);
+    
+    const createdOrder = {
+      id: docRef.id,
+      ...order
+    };
+
+    console.log('✅ Created auction order:', docRef.id);
+    await notificationService.createOrderNotification(createdOrder, 'auction_won');
+    
+    return {
+      success: true,
+      orderId: docRef.id,
+      message: 'Auction order created successfully!'
+    };
+
+  } catch (error) {
+    console.error('Error creating auction order:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const checkExistingAuctionOrder = async (auctionId, productId, buyerId) => {
+  try {
+    let q;
+    
+    // Ưu tiên tìm bằng auctionId
+    if (auctionId) {
+      q = query(
+        collection(db, 'orders'),
+        where('auctionId', '==', auctionId),
+        where('orderType', '==', 'auction')
+      );
+    } else {
+      // Fallback: tìm bằng productId và buyerId
+      q = query(
+        collection(db, 'orders'),
+        where('productId', '==', productId),
+        where('buyerId', '==', buyerId),
+        where('orderType', '==', 'auction')
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return {
+        exists: false
+      };
+    } else {
+      const orderId = querySnapshot.docs[0].id;
+      console.log('📦 Found existing auction order:', orderId);
+      return {
+        exists: true,
+        orderId: orderId
+      };
+    }
+  } catch (error) {
+    console.error('Error checking existing auction order:', error);
+    return { exists: false };
   }
 };
 
@@ -133,14 +259,6 @@ export const updateOrderStatus = async (orderId, newStatus) => {
       updatedAt: serverTimestamp()
     };
     
-    if (newStatus === 'accepted') {
-      updateData.acceptedAt = serverTimestamp();
-    } else if (newStatus === 'rejected') {
-      updateData.rejectedAt = serverTimestamp();
-    } else if (newStatus === 'completed') {
-      updateData.completedAt = serverTimestamp();
-    }
-    
     await updateDoc(orderRef, updateData);
 
     const orderResult = await getOrderById(orderId);
@@ -156,41 +274,6 @@ export const updateOrderStatus = async (orderId, newStatus) => {
     
   } catch (error) {
     console.error('Error updating order:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-export const checkExistingOrder = async (productId, buyerId) => {
-  try {
-    const q = query(
-      collection(db, 'orders'),
-      where('productId', '==', productId),
-      where('buyerId', '==', buyerId),
-      where('status', 'in', ['pending', 'accepted'])
-    );
-    
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.empty) {
-      return {
-        success: true,
-        exists: false
-      };
-    } else {
-      const existingOrder = querySnapshot.docs[0].data();
-      return {
-        success: true,
-        exists: true,
-        orderId: querySnapshot.docs[0].id,
-        status: existingOrder.status
-      };
-    }
-    
-  } catch (error) {
-    console.error('Error checking existing order:', error);
     return {
       success: false,
       error: error.message
@@ -233,7 +316,6 @@ export const cancelOrder = async (orderId, userId) => {
   }
 };
 
-// New function for accepting order with payment information
 export const acceptOrderWithPayment = async (orderId, sellerNote, paymentPercentage, sellerBankAccount) => {
   try {
     const orderRef = doc(db, 'orders', orderId);
@@ -244,8 +326,7 @@ export const acceptOrderWithPayment = async (orderId, sellerNote, paymentPercent
       paymentPercentage: paymentPercentage || 50,
       sellerBankAccount: sellerBankAccount,
       paymentStatus: 'pending',
-      updatedAt: serverTimestamp(),
-      acceptedAt: serverTimestamp()
+      updatedAt: serverTimestamp()
     };
     
     await updateDoc(orderRef, updateData);
@@ -269,32 +350,35 @@ export const acceptOrderWithPayment = async (orderId, sellerNote, paymentPercent
   }
 };
 
-// Additional function to get orders by status
-export const getOrdersByStatus = async (userId, status, type = 'buying') => {
+// Thêm vào file orderService.js, trong phần exports
+export const checkExistingOrder = async (productId, buyerId) => {
   try {
-    let field = type === 'buying' ? 'buyerId' : 'sellerId';
-    
     const q = query(
       collection(db, 'orders'),
-      where(field, '==', userId),
-      where('status', '==', status),
-      orderBy('createdAt', 'desc')
+      where('productId', '==', productId),
+      where('buyerId', '==', buyerId),
+      where('status', 'in', ['pending', 'accepted'])
     );
     
     const querySnapshot = await getDocs(q);
-    const orders = [];
     
-    querySnapshot.forEach((doc) => {
-      orders.push({ id: doc.id, ...doc.data() });
-    });
-    
-    return {
-      success: true,
-      orders
-    };
+    if (querySnapshot.empty) {
+      return {
+        success: true,
+        exists: false
+      };
+    } else {
+      const existingOrder = querySnapshot.docs[0].data();
+      return {
+        success: true,
+        exists: true,
+        orderId: querySnapshot.docs[0].id,
+        status: existingOrder.status
+      };
+    }
     
   } catch (error) {
-    console.error('Error getting orders by status:', error);
+    console.error('Error checking existing order:', error);
     return {
       success: false,
       error: error.message

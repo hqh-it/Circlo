@@ -24,8 +24,9 @@ import {
   MessageType
 } from './chatTypes';
 
-export const auctionChatService = {
+const orderCreationLocks = new Map();
 
+export const auctionChatService = {
   parseTimestamp: (timestamp) => {
     if (!timestamp) return new Date();
     
@@ -85,6 +86,8 @@ export const auctionChatService = {
         participantCount: createData.participants?.length || 1,
         isActive: true,
         createdBy: createData.createdBy,
+        orderCreated: false,
+        orderCreationInProgress: false,
         lastBidAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -538,55 +541,241 @@ export const auctionChatService = {
   },
 
   updateAuctionChannel: async (auctionId, updateData) => {
-  try {
-    console.log('updateAuctionChannel called with:', { auctionId, updateData });
-    
-    const channelsQuery = query(
-      collection(db, 'auction_channels'),
-      where('auctionId', '==', auctionId)
-    );
-    
-    const querySnapshot = await getDocs(channelsQuery);
-    console.log('Found channels:', querySnapshot.size);
-    
-    if (querySnapshot.empty) {
-      console.log('No channel found for auctionId:', auctionId);
-      return { success: false, error: 'Auction channel not found' };
-    }
+    try {
+      const channelsQuery = query(
+        collection(db, 'auction_channels'),
+        where('auctionId', '==', auctionId)
+      );
+      
+      const querySnapshot = await getDocs(channelsQuery);
+      
+      if (querySnapshot.empty) {
+        return { success: false, error: 'Auction channel not found' };
+      }
 
-    const updatePromises = querySnapshot.docs.map(async (channelDoc) => {
-      const channelRef = doc(db, 'auction_channels', channelDoc.id);
-      console.log('Updating channel:', channelDoc.id, 'with data:', updateData);
-      
-      // SỬA QUAN TRỌNG: Sử dụng serverTimestamp() và xử lý nested fields
-      const firestoreUpdateData = {
-        ...updateData,
-        updatedAt: serverTimestamp() // Sử dụng serverTimestamp thay vì new Date()
-      };
-      
-      // Xử lý nested fields nếu cần
-      if (updateData.productInfo) {
-        // Đảm bảo productInfo được cập nhật đúng cách
-        firestoreUpdateData.productInfo = {
-          ...updateData.productInfo
+      const updatePromises = querySnapshot.docs.map(async (channelDoc) => {
+        const channelRef = doc(db, 'auction_channels', channelDoc.id);
+        
+        const firestoreUpdateData = {
+          ...updateData,
+          updatedAt: serverTimestamp()
         };
+        
+        if (updateData.productInfo) {
+          firestoreUpdateData.productInfo = {
+            ...updateData.productInfo
+          };
+        }
+        
+        await updateDoc(channelRef, firestoreUpdateData);
+      });
+
+      await Promise.all(updatePromises);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating auction channel:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  checkExistingAuctionOrder: async (auctionId, productId, buyerId) => {
+    try {
+      let q;
+      
+      if (auctionId) {
+        q = query(
+          collection(db, 'orders'),
+          where('auctionId', '==', auctionId),
+          where('orderType', '==', 'auction')
+        );
+      } else {
+        q = query(
+          collection(db, 'orders'),
+          where('productId', '==', productId),
+          where('buyerId', '==', buyerId),
+          where('orderType', '==', 'auction')
+        );
       }
       
-      await updateDoc(channelRef, firestoreUpdateData);
+      const querySnapshot = await getDocs(q);
       
-      console.log('Channel updated successfully:', channelDoc.id);
-    });
+      if (querySnapshot.empty) {
+        return {
+          exists: false
+        };
+      } else {
+        return {
+          exists: true,
+          orderId: querySnapshot.docs[0].id
+        };
+      }
+    } catch (error) {
+      console.error('Error checking existing auction order:', error);
+      return { exists: false };
+    }
+  },
 
-    await Promise.all(updatePromises);
+  endAuctionAndCreateOrderAutomatically: async (auctionChannel) => {
+    const lockKey = `auction_${auctionChannel.id}`;
     
-    console.log('All channels updated successfully');
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating auction channel:', error);
-    return { success: false, error: error.message };
-  }
-},
+    if (orderCreationLocks.get(lockKey)) {
+      return { success: true, message: 'Order creation in progress' };
+    }
 
+    orderCreationLocks.set(lockKey, true);
+
+    try {
+      if (!auctionChannel.highestBidder) {
+        orderCreationLocks.delete(lockKey);
+        return { success: false, error: 'No winner for this auction' };
+      }
+
+      const result = await runTransaction(db, async (transaction) => {
+        const channelRef = doc(db, 'auction_channels', auctionChannel.id);
+        const channelDoc = await transaction.get(channelRef);
+        
+        if (!channelDoc.exists()) {
+          throw new Error('Auction channel not found');
+        }
+
+        const channelData = channelDoc.data();
+        
+        if (channelData.orderCreated || channelData.orderCreationInProgress) {
+          return { success: true, message: 'Order already created or in progress' };
+        }
+
+        transaction.update(channelRef, {
+          orderCreationInProgress: true,
+          updatedAt: serverTimestamp()
+        });
+
+        const existingOrderCheck = await auctionChatService.checkExistingAuctionOrder(
+          auctionChannel.id,
+          auctionChannel.productInfo.id, 
+          auctionChannel.highestBidder
+        );
+        
+        if (existingOrderCheck.exists) {
+          transaction.update(channelRef, {
+            orderCreated: true,
+            orderId: existingOrderCheck.orderId,
+            orderCreationInProgress: false,
+            updatedAt: serverTimestamp()
+          });
+          return { success: true, orderId: existingOrderCheck.orderId, message: 'Order already exists' };
+        }
+
+        const [sellerData, buyerData] = await Promise.all([
+          loadUserData({ uid: auctionChannel.productInfo.sellerId }),
+          loadUserData({ uid: auctionChannel.highestBidder })
+        ]);
+
+        const orderData = {
+          productId: auctionChannel.productInfo.id,
+          sellerId: auctionChannel.productInfo.sellerId,
+          buyerId: auctionChannel.highestBidder,
+          productSnapshot: {
+            title: auctionChannel.productInfo.title,
+            price: auctionChannel.currentBid,
+            images: auctionChannel.productInfo.images,
+            condition: auctionChannel.productInfo.condition || 'like_new',
+            category: 'auction'
+          },
+          buyerAddress: buyerData?.address || {
+            street: '',
+            province: '',
+            district: '',
+            ward: '',
+            fullAddress: 'Address to be provided by buyer'
+          },
+          sellerAddress: sellerData?.address,
+          shippingFee: 0,
+          totalAmount: auctionChannel.currentBid,
+          orderType: 'auction',
+          auctionId: auctionChannel.id,
+          sellerBankAccount: sellerData?.bankAccounts?.[0] || null,
+          winnerInfo: {
+            uid: auctionChannel.highestBidder,
+            displayName: buyerData?.fullName || 'Buyer',
+            avatarURL: buyerData?.avatarURL
+          }
+        };
+
+        const ordersRef = collection(db, 'orders');
+        const orderRef = doc(ordersRef);
+        const order = {
+          ...orderData,
+          id: orderRef.id,
+          status: 'waiting_payment',
+          paymentPercentage: 50,
+          paymentStatus: 'pending',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        };
+
+        transaction.set(orderRef, order);
+
+        transaction.update(channelRef, {
+          orderCreated: true,
+          orderId: orderRef.id,
+          orderCreationInProgress: false,
+          updatedAt: serverTimestamp()
+        });
+
+        return { success: true, orderId: orderRef.id, orderData: order };
+      });
+
+      if (result.success && result.orderId) {
+        await auctionChatService.createSystemMessage(
+          auctionChannel.id,
+          'auction_ended',
+          `🏆 Auction ended! Order has been created for the winner.`,
+          { orderId: result.orderId }
+        );
+
+        const notificationService = await import('../Notification/notificationService');
+        await notificationService.notificationService.createOrderNotification(result.orderData, 'auction_won');
+      }
+
+      orderCreationLocks.delete(lockKey);
+      return result;
+
+    } catch (error) {
+      orderCreationLocks.delete(lockKey);
+      
+      try {
+        const channelRef = doc(db, 'auction_channels', auctionChannel.id);
+        await updateDoc(channelRef, {
+          orderCreationInProgress: false,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error resetting order creation flag:', updateError);
+      }
+
+      console.error('Error creating auction order automatically:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  updateAuctionStatus: async (channelId, status) => {
+    try {
+      const channelRef = doc(db, 'auction_channels', channelId);
+      await updateDoc(channelRef, {
+        status: status,
+        updatedAt: serverTimestamp()
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating auction status:', error);
+      return { success: false, error: error.message };
+    }
+  }
 };
 
 export default auctionChatService;

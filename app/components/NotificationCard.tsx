@@ -1,4 +1,3 @@
-// NotificationCard.tsx
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -55,6 +54,8 @@ interface Order {
   sellerBankAccount?: BankAccount;
   paymentPercentage?: number;
   sellerNote?: string;
+  orderType?: 'normal' | 'auction';
+  auctionId?: string;
   createdAt: any;
   updatedAt: any;
   expiresAt: any;
@@ -104,6 +105,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 
   const isBuyerNotification = notification.data?.buyerId === user.uid;
   const isSellerNotification = notification.data?.sellerId === user.uid && notification.data?.buyerId !== user.uid;
+  const isAuctionNotification = notification.type.includes('auction');
+  const isAuctionWon = notification.type === 'auction_won';
 
   useEffect(() => {
     const loadUserDataForNotification = async () => {
@@ -302,13 +305,24 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   };
 
   const renderPaymentInfo = () => {
-    if (notification.type !== 'order_accepted_with_payment' || !isBuyerNotification) {
+    if ((notification.type !== 'order_accepted_with_payment' && !isAuctionWon) || !isBuyerNotification) {
       return null;
     }
 
     const order = notification.data;
     const sellerBankAccount = order?.sellerBankAccount;
     
+    if (!sellerBankAccount && isAuctionWon) {
+      return (
+        <View style={styles.paymentSection}>
+          <Text style={styles.paymentTitle}>🏆 Auction Won!</Text>
+          <Text style={styles.auctionMessage}>
+            Congratulations! You won this auction. Please wait for the seller to provide payment information.
+          </Text>
+        </View>
+      );
+    }
+
     if (!sellerBankAccount) {
       return null;
     }
@@ -368,7 +382,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
-    if (otherUserData) {
+    if (otherUserData && !isAuctionNotification) {
       const userRole = isSellerNotification ? 'Buyer' : 'Seller';
       const userId = isSellerNotification ? notification.data?.buyerId : notification.data?.sellerId;
       
@@ -388,6 +402,20 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
+    if (isAuctionWon) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.auctionCrown}>
+            <Text style={styles.crownIcon}>👑</Text>
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>Auction Result</Text>
+            <Text style={styles.userName}>You are the winner!</Text>
+          </View>
+        </View>
+      );
+    }
+
     return null;
   };
 
@@ -401,7 +429,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         style={[
           styles.container,
           !notification.isRead && styles.unreadContainer,
-          (isSellerActionable || isBuyerActionable) && styles.actionableContainer
+          (isSellerActionable || isBuyerActionable) && styles.actionableContainer,
+          isAuctionWon && styles.auctionContainer
         ]}
         onPress={markAsRead}
       >
@@ -425,6 +454,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
                   </Text>
                   <Text style={styles.productPrice}>
                     {formatPrice(order?.productSnapshot?.price || 0)}
+                    {isAuctionWon && <Text style={styles.auctionPrice}> (Winning Bid)</Text>}
                   </Text>
                 </View>
               </View>
@@ -503,7 +533,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     );
   };
 
-  if (isBuyerNotification || isSellerNotification) {
+  if (isBuyerNotification || isSellerNotification || isAuctionNotification) {
     return renderNotificationContent();
   }
 
@@ -532,6 +562,10 @@ const styles = StyleSheet.create({
     borderLeftColor: '#FFA500',
     backgroundColor: '#fffaf0',
   },
+  auctionContainer: {
+    borderLeftColor: '#FFD700',
+    backgroundColor: '#fffdf0',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -553,6 +587,18 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     marginRight: 10,
+  },
+  auctionCrown: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFD700',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  crownIcon: {
+    fontSize: 16,
   },
   userText: {
     flex: 1,
@@ -609,6 +655,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#00A86B',
   },
+  auctionPrice: {
+    fontSize: 11,
+    color: '#FF6B35',
+    fontStyle: 'italic',
+  },
   unreadDot: {
     width: 8,
     height: 8,
@@ -657,6 +708,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#007AFF',
+  },
+  auctionMessage: {
+    fontSize: 13,
+    color: '#666',
+    padding: 12,
+    lineHeight: 18,
   },
   dropdownArrow: {
     fontSize: 12,

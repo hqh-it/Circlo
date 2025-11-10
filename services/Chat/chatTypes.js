@@ -37,6 +37,21 @@ export const SystemMessageType = {
 };
 
 
+export class AuctionOrderResult {
+  constructor(
+    success = false,
+    orderId = '',
+    message = '',
+    error = ''
+  ) {
+    this.success = success;
+    this.orderId = orderId;
+    this.message = message;
+    this.error = error;
+  }
+}
+
+
 export class ChatChannel {
   constructor(
     id = '',
@@ -230,6 +245,7 @@ export default {
   MessageStatus,
   AuctionStatus,
   SystemMessageType,
+  AuctionOrderResult,
   ChatChannel,
   AuctionChannel,
   ChatMessage,

@@ -36,6 +36,7 @@ interface ProductInfo {
   startPrice?: number;
   sellerName?: string;
   sellerAvatar?: string;
+  condition?: string;
 }
 
 interface AuctionChannel {
@@ -711,14 +712,19 @@ const AuctionChatScreen = () => {
         {showResult && auctionChannel && (
           <AuctionResult
             auctionChannel={{
+              id: auctionChannel.id,
               currentBid: auctionChannel.currentBid,
               highestBidder: auctionChannel.highestBidder,
               bidCount: auctionChannel.bidCount,
               participantCount: auctionChannel.participantCount,
               productInfo: {
-                startPrice: auctionChannel.productInfo.price,
+                startPrice: auctionChannel.productInfo.startPrice,
                 bidIncrement: auctionChannel.productInfo.bidIncrement,
-                title: auctionChannel.productInfo.title
+                title: auctionChannel.productInfo.title,
+                id: auctionChannel.productInfo.id,
+                sellerId: auctionChannel.productInfo.sellerId,
+                images: auctionChannel.productInfo.images,
+                condition: auctionChannel.productInfo.condition
               }}
             }
             participantsData={participantsData}

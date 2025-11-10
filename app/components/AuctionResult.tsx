@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useAuth } from '../../services/Auth/AuthContext';
+import { auctionChatService } from '../../services/Chat/auctionChatService';
 import { BidMessage as ChatBidMessage, SystemMessage as ChatSystemMessage } from '../../services/Chat/chatTypes';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -24,6 +26,7 @@ type SystemMessage = ChatSystemMessage;
 
 interface AuctionResultProps {
   auctionChannel: {
+    id: string;
     currentBid: number;
     highestBidder: string;
     bidCount: number;
@@ -32,13 +35,19 @@ interface AuctionResultProps {
       startPrice?: number;
       bidIncrement: number;
       title: string;
+      id: string;
+      sellerId: string;
+      images: string[];
+      condition?: string;
     };
+    orderCreated?: boolean;
   };
   participantsData: Record<string, UserData>;
   messages: (BidMessage | SystemMessage)[];
   formatCurrency: (amount: number) => string;
   loadingUsers?: boolean;
   onClose?: () => void;
+  auctionStatus?: 'upcoming' | 'live' | 'ended' | 'cancelled';
 }
 
 const AuctionResult: React.FC<AuctionResultProps> = ({ 
@@ -47,8 +56,11 @@ const AuctionResult: React.FC<AuctionResultProps> = ({
   messages,
   formatCurrency,
   loadingUsers = false,
-  onClose
+  onClose,
+  auctionStatus = 'ended'
 }) => {
+  const { user } = useAuth();
+
   if (!auctionChannel) return null;
 
   const winnerInfo = participantsData[auctionChannel.highestBidder];
@@ -58,6 +70,41 @@ const AuctionResult: React.FC<AuctionResultProps> = ({
     .filter((msg): msg is BidMessage => msg.type === 'bid')
     .sort((a, b) => new Date(a.timestamp?.toDate?.() || a.timestamp).getTime() - 
                     new Date(b.timestamp?.toDate?.() || b.timestamp).getTime());
+
+  useEffect(() => {
+    const createOrderAutomatically = async () => {
+      // Điều kiện chặt chẽ: chỉ tạo khi auction ended VÀ chưa có order VÀ có highestBidder
+      if (auctionChannel.highestBidder && 
+          auctionStatus === 'ended' && 
+          !auctionChannel.orderCreated) {
+        
+        console.log('🔄 Attempting to create auction order...');
+        
+        try {
+          const result = await auctionChatService.endAuctionAndCreateOrderAutomatically(auctionChannel);
+          
+          if (result.success) {
+            console.log('✅ Auction order created automatically:', result.orderId);
+          } else {
+            console.log('ℹ️ Order creation result:', result.message);
+          }
+        } catch (error) {
+          console.error('❌ Error creating auction order:', error);
+        }
+      } else {
+        console.log('⏸️ Skipping order creation - conditions not met:', {
+          hasHighestBidder: !!auctionChannel.highestBidder,
+          auctionStatus,
+          orderCreated: auctionChannel.orderCreated
+        });
+      }
+    };
+
+    createOrderAutomatically();
+  }, [auctionChannel, auctionStatus]);
+
+  const isWinner = user?.uid === auctionChannel.highestBidder;
+  const isSeller = user?.uid === auctionChannel.productInfo.sellerId;
 
   if (loadingUsers) {
     return (
@@ -238,6 +285,18 @@ const AuctionResult: React.FC<AuctionResultProps> = ({
               <Text style={styles.noBidsText}>No bids were placed</Text>
             </View>
           )}
+        </View>
+
+        <View style={styles.orderSection}>
+          <Text style={styles.sectionTitle}>Order Status</Text>
+          <Text style={styles.orderInfo}>
+            {isWinner 
+              ? "🎉 Congratulations! You won this auction!"
+              : isSeller
+              ? "📦 The auction has ended successfully."
+              : "ℹ️ The auction has ended. Thank you for participating!"
+            }
+          </Text>
         </View>
       </View>
     </View>
@@ -561,6 +620,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999999',
     fontStyle: 'italic',
+  },
+  orderSection: {
+    padding: 16,
+    backgroundColor: '#f8fff8',
+    borderTopWidth: 1,
+    borderTopColor: '#E8E8E8',
+  },
+  orderInfo: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 8,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
