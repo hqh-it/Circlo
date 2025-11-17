@@ -4,6 +4,7 @@ import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../services/Auth/AuthContext";
 import Header from "../../components/header_for_detail";
+import HistoryFeed from "../../components/HistoryFeed";
 import PersonalInfo from "../../components/PersonalInfo";
 import ProductFeed from "../../components/ProductFeed";
 
@@ -13,7 +14,7 @@ export default function Profile(){
     const { user } = useAuth(); 
     const [selectedTab, setSelectedTab] = React.useState("Information");
     const [productSubTab, setProductSubTab] = React.useState("Products");
-    const [historySubTab, setHistorySubTab] = React.useState("Orders"); // Thêm state cho History sub-tab
+    const [historySubTab, setHistorySubTab] = React.useState("Orders");
     const [refreshKey, setRefreshKey] = React.useState(0);
     
     useFocusEffect(
@@ -119,7 +120,7 @@ export default function Profile(){
                                     styles.subTabText,
                                     historySubTab === "Orders" && styles.activeSubTabText
                                 ]}>
-                                     Orders
+                                    Your Products
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity 
@@ -133,25 +134,23 @@ export default function Profile(){
                                     styles.subTabText,
                                     historySubTab === "Purchased" && styles.activeSubTabText
                                 ]}>
-                                     Purchased
+                                    Your Purchased
                                 </Text>
                             </TouchableOpacity>
                         </View>
                         
                         <View style={styles.feedContainer}>
                             {historySubTab === "Orders" && (
-                                <View style={styles.placeholderContainer}>
-                                    <Text style={styles.placeholderText}>
-                                        Your orders will appear here
-                                    </Text>
-                                </View>
+                                <HistoryFeed 
+                                    key={`history-orders-${refreshKey}`} 
+                                    tabType="Orders" 
+                                />
                             )}
                             {historySubTab === "Purchased" && (
-                                <View style={styles.placeholderContainer}>
-                                    <Text style={styles.placeholderText}>
-                                        Your purchased items will appear here
-                                    </Text>
-                                </View>
+                                <HistoryFeed 
+                                    key={`history-purchased-${refreshKey}`} 
+                                    tabType="Purchased" 
+                                />
                             )}
                         </View>
                     </View>
@@ -243,15 +242,4 @@ const styles = StyleSheet.create({
         flex: 1,
         width: '100%',
     },
-    placeholderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    placeholderText: {
-        fontSize: 16,
-        color: '#999',
-        textAlign: 'center',
-    }
 });

@@ -174,6 +174,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         const baseQuery = query(
           productsRef,
           where('sellerId', '==', userId),
+          where('status', '==', 'active'),
           orderBy('createdAt', 'desc')
         );
 
@@ -181,7 +182,11 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
           ? query(baseQuery, startAfter(lastVisible), limit(PAGE_SIZE))
           : query(baseQuery, limit(PAGE_SIZE));
       } else {
-        const baseQuery = query(productsRef, orderBy('createdAt', 'desc'));
+        const baseQuery = query(
+          productsRef,
+          where('status', '==', 'active'),
+          orderBy('createdAt', 'desc')
+        );
         
         productsQuery = isLoadMore
           ? query(baseQuery, startAfter(lastVisible), limit(PAGE_SIZE))

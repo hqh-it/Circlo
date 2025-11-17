@@ -1,5 +1,7 @@
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -49,6 +51,20 @@ export const chatService = {
       });
 
       if (existingChannel) {
+        if (existingChannel.hiddenForUsers && 
+            existingChannel.hiddenForUsers.includes(createData.participants[0])) {
+          
+          console.log('🔄 Auto-restoring hidden channel for user:', createData.participants[0]);
+          const channelRef = doc(db, 'channels', existingChannel.id);
+          await updateDoc(channelRef, {
+            hiddenForUsers: arrayRemove(createData.participants[0])
+          });
+        
+          existingChannel.hiddenForUsers = existingChannel.hiddenForUsers.filter(
+            uid => uid !== createData.participants[0]
+          );
+        }
+
         return {
           success: true,
           channelId: existingChannel.id,
@@ -66,7 +82,8 @@ export const chatService = {
         lastMessage: '',
         lastMessageAt: serverTimestamp(),
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        hiddenForUsers: [] 
       });
 
       return {
@@ -123,6 +140,60 @@ export const chatService = {
     }
   },
 
+  sendSystemMessage: async (channelId, content) => {
+    try {
+      const messageRef = await addDoc(collection(db, 'messages'), {
+        channelId: channelId,
+        senderId: 'system',
+        content: content,
+        type: 'system',
+        timestamp: serverTimestamp(),
+        readBy: [],
+        status: MessageStatus.SENT
+      });
+
+      const channelRef = doc(db, 'channels', channelId);
+      await updateDoc(channelRef, {
+        lastMessage: content,
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      return {
+        success: true,
+        messageId: messageRef.id
+      };
+
+    } catch (error) {
+      console.error('Error sending system message:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  exitChat: async (channelId, userId) => {
+    try {
+      const channelRef = doc(db, 'channels', channelId);
+      
+      await updateDoc(channelRef, {
+        hiddenForUsers: arrayUnion(userId)
+      });
+
+      return {
+        success: true
+      };
+
+    } catch (error) {
+      console.error('Error exiting chat:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
   getUserChannels: async (userId) => {
     try {
       const channelsRef = collection(db, 'channels');
@@ -136,10 +207,13 @@ export const chatService = {
       const channels = [];
       
       snapshot.forEach(doc => {
-        channels.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        const channelData = doc.data();
+        if (!channelData.hiddenForUsers || !channelData.hiddenForUsers.includes(userId)) {
+          channels.push({
+            id: doc.id,
+            ...channelData
+          });
+        }
       });
 
       return {
@@ -169,10 +243,13 @@ export const chatService = {
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const channels = [];
         snapshot.forEach(doc => {
-          channels.push({
-            id: doc.id,
-            ...doc.data()
-          });
+          const channelData = doc.data();
+          if (!channelData.hiddenForUsers || !channelData.hiddenForUsers.includes(userId)) {
+            channels.push({
+              id: doc.id,
+              ...channelData
+            });
+          }
         });
         callback({
           success: true,
@@ -333,6 +410,10 @@ export const chatService = {
         
         for (const doc of snapshot.docs) {
           const channel = doc.data();
+          if (channel.hiddenForUsers && channel.hiddenForUsers.includes(userId)) {
+            continue;
+          }
+          
           const messagesRef = collection(db, 'messages');
           const messagesQuery = query(
             messagesRef,

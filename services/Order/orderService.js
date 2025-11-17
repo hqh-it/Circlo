@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { notificationService } from '../Notification/notificationService';
+import { updateProduct } from '../Product/productService';
 
 export const createOrder = async (orderData) => {
   try {
@@ -91,10 +92,9 @@ export const createAuctionOrder = async (auctionData) => {
       winnerInfo
     } = auctionData;
 
-    // Kiểm tra kỹ order đã tồn tại chưa
     const existingOrder = await checkExistingAuctionOrder(auctionId, productId, buyerId);
     if (existingOrder.exists) {
-      console.log('🔄 Auction order already exists:', existingOrder.orderId);
+      console.log('Auction order already exists:', existingOrder.orderId);
       return {
         success: true,
         orderId: existingOrder.orderId,
@@ -136,7 +136,7 @@ export const createAuctionOrder = async (auctionData) => {
       ...order
     };
 
-    console.log('✅ Created auction order:', docRef.id);
+    console.log('Created auction order:', docRef.id);
     await notificationService.createOrderNotification(createdOrder, 'auction_won');
     
     return {
@@ -158,7 +158,6 @@ export const checkExistingAuctionOrder = async (auctionId, productId, buyerId) =
   try {
     let q;
     
-    // Ưu tiên tìm bằng auctionId
     if (auctionId) {
       q = query(
         collection(db, 'orders'),
@@ -166,7 +165,6 @@ export const checkExistingAuctionOrder = async (auctionId, productId, buyerId) =
         where('orderType', '==', 'auction')
       );
     } else {
-      // Fallback: tìm bằng productId và buyerId
       q = query(
         collection(db, 'orders'),
         where('productId', '==', productId),
@@ -183,7 +181,7 @@ export const checkExistingAuctionOrder = async (auctionId, productId, buyerId) =
       };
     } else {
       const orderId = querySnapshot.docs[0].id;
-      console.log('📦 Found existing auction order:', orderId);
+      console.log('Found existing auction order:', orderId);
       return {
         exists: true,
         orderId: orderId
@@ -265,6 +263,10 @@ export const updateOrderStatus = async (orderId, newStatus) => {
     if (orderResult.success) {
       const notificationType = `order_${newStatus}`;
       await notificationService.createOrderNotification(orderResult.order, notificationType);
+
+      if (newStatus === 'completed') {
+        await markProductAsSold(orderResult.order.productId);
+      }
     }
     
     return {
@@ -274,6 +276,61 @@ export const updateOrderStatus = async (orderId, newStatus) => {
     
   } catch (error) {
     console.error('Error updating order:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const confirmReceipt = async (orderId) => {
+  try {
+    const orderRef = doc(db, 'orders', orderId);
+    
+    const updateData = {
+      buyerConfirmed: true,
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(orderRef, updateData);
+
+    const orderResult = await getOrderById(orderId);
+    if (orderResult.success) {
+      await notificationService.createOrderNotification(orderResult.order, 'order_receipt_confirmed');
+    }
+    
+    return {
+      success: true,
+      message: 'Receipt confirmed successfully!'
+    };
+    
+  } catch (error) {
+    console.error('Error confirming receipt:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+const markProductAsSold = async (productId) => {
+  try {
+    console.log(`Marking product ${productId} as sold...`);
+    
+    const updateResult = await updateProduct(productId, {
+      status: 'sold',
+      updatedAt: serverTimestamp()
+    });
+    
+    if (updateResult.success) {
+      console.log(`Product ${productId} marked as sold successfully`);
+    } else {
+      console.error(`Failed to mark product as sold:`, updateResult.error);
+    }
+    
+    return updateResult;
+  } catch (error) {
+    console.error('Error marking product as sold:', error);
     return {
       success: false,
       error: error.message
@@ -295,8 +352,8 @@ export const cancelOrder = async (orderId, userId) => {
       return { success: false, error: 'Only buyer can cancel this order' };
     }
     
-    if (order.status !== 'pending') {
-      return { success: false, error: 'Only pending orders can be cancelled' };
+    if (order.status !== 'pending' && order.status !== 'waiting_payment') {
+      return { success: false, error: 'Only pending or waiting payment orders can be cancelled' };
     }
     
     const result = await updateOrderStatus(orderId, 'cancelled');
@@ -350,7 +407,6 @@ export const acceptOrderWithPayment = async (orderId, sellerNote, paymentPercent
   }
 };
 
-// Thêm vào file orderService.js, trong phần exports
 export const checkExistingOrder = async (productId, buyerId) => {
   try {
     const q = query(

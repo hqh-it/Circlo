@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../services/Auth/AuthContext';
 import { notificationService } from '../../services/Notification/notificationService';
-import { acceptOrderWithPayment, cancelOrder, updateOrderStatus } from '../../services/Order/orderService';
+import { acceptOrderWithPayment, cancelOrder, confirmReceipt, updateOrderStatus } from '../../services/Order/orderService';
 import { formatPrice } from '../../services/Product/productService';
 import { loadUserData } from '../../services/User/userService';
 import AcceptOrderModal from '../components/AcceptOrderModal';
@@ -56,6 +56,7 @@ interface Order {
   sellerNote?: string;
   orderType?: 'normal' | 'auction';
   auctionId?: string;
+  buyerConfirmed?: boolean;
   createdAt: any;
   updatedAt: any;
   expiresAt: any;
@@ -107,6 +108,9 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const isSellerNotification = notification.data?.sellerId === user.uid && notification.data?.buyerId !== user.uid;
   const isAuctionNotification = notification.type.includes('auction');
   const isAuctionWon = notification.type === 'auction_won';
+  const isReceiptConfirmedBuyer = notification.type === 'order_receipt_confirmed_buyer';
+  const isReceiptConfirmedSeller = notification.type === 'order_receipt_confirmed_seller';
+  const isOrderCompleted = notification.type === 'order_completed_buyer' || notification.type === 'order_completed_seller';
 
   useEffect(() => {
     const loadUserDataForNotification = async () => {
@@ -217,6 +221,29 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     }
   };
 
+  const handleConfirmReceipt = async () => {
+    if (!notification.data) return;
+
+    setActionLoading(true);
+    try {
+      await markAsRead();
+      
+      const result = await confirmReceipt(notification.data.id);
+      
+      if (result.success) {
+        Alert.alert('Success', result.message);
+        onNotificationUpdate?.();
+      } else {
+        Alert.alert('Error', result.error || 'Action failed');
+      }
+    } catch (error) {
+      console.error('Error confirming receipt:', error);
+      Alert.alert('Error', 'Something went wrong');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleAddBank = () => {
     setShowAcceptModal(false);
     onAddBankRequest?.();
@@ -315,7 +342,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     if (!sellerBankAccount && isAuctionWon) {
       return (
         <View style={styles.paymentSection}>
-          <Text style={styles.paymentTitle}>🏆 Auction Won!</Text>
+          <Text style={styles.paymentTitle}>Auction Won!</Text>
           <Text style={styles.auctionMessage}>
             Congratulations! You won this auction. Please wait for the seller to provide payment information.
           </Text>
@@ -333,7 +360,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           style={styles.paymentHeader}
           onPress={() => setShowPaymentDetails(!showPaymentDetails)}
         >
-          <Text style={styles.paymentTitle}>💳 Payment Information</Text>
+          <Text style={styles.paymentTitle}>Payment Information</Text>
           <Text style={styles.dropdownArrow}>
             {showPaymentDetails ? '▲' : '▼'}
           </Text>
@@ -382,7 +409,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
-    if (otherUserData && !isAuctionNotification) {
+    if (otherUserData && !isAuctionNotification && !isReceiptConfirmedBuyer && !isReceiptConfirmedSeller && !isOrderCompleted) {
       const userRole = isSellerNotification ? 'Buyer' : 'Seller';
       const userId = isSellerNotification ? notification.data?.buyerId : notification.data?.sellerId;
       
@@ -416,13 +443,59 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
+    if (isReceiptConfirmedBuyer) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.confirmedBadge}>
+            <Text style={styles.confirmedIcon}>✅</Text>
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>Receipt Confirmed</Text>
+            <Text style={styles.userName}>Order completed!</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (isReceiptConfirmedSeller) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.confirmedBadge}>
+            <Text style={styles.confirmedIcon}>✅</Text>
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>Buyer Confirmed</Text>
+            <Text style={styles.userName}>Buyer received the item</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (isOrderCompleted) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.completedBadge}>
+            <Text style={styles.completedIcon}>🎉</Text>
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>Order Completed</Text>
+            <Text style={styles.userName}>Transaction successful!</Text>
+          </View>
+        </View>
+      );
+    }
+
     return null;
   };
 
   const renderNotificationContent = () => {
     const order = notification.data;
     const isSellerActionable = isSellerNotification && notification.type === 'new_order_seller' && order?.status === 'pending';
-    const isBuyerActionable = isBuyerNotification && notification.type === 'new_order_buyer' && order?.status === 'pending';
+    const isBuyerActionable = (isBuyerNotification && notification.type === 'new_order_buyer' && order?.status === 'pending') || 
+                             (isBuyerNotification && (notification.type === 'order_accepted_with_payment' || isAuctionWon) && 
+                              (order?.status === 'waiting_payment' || order?.status === 'accepted'));
+    const canConfirmReceipt = isBuyerNotification && (notification.type === 'order_accepted' || notification.type === 'order_accepted_with_payment' || isAuctionWon) && 
+                             (order?.status === 'accepted' || order?.status === 'waiting_payment');
 
     return (
       <TouchableOpacity 
@@ -430,7 +503,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           styles.container,
           !notification.isRead && styles.unreadContainer,
           (isSellerActionable || isBuyerActionable) && styles.actionableContainer,
-          isAuctionWon && styles.auctionContainer
+          isAuctionWon && styles.auctionContainer,
+          (isReceiptConfirmedBuyer || isReceiptConfirmedSeller || isOrderCompleted) && styles.completedContainer
         ]}
         onPress={markAsRead}
       >
@@ -501,22 +575,35 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               </View>
             )}
 
-            {isBuyerActionable && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
-                onPress={handleBuyerCancel}
-                disabled={actionLoading}
-              >
-                {actionLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.actionButtonText}>Cancel Order</Text>
-                )}
-              </TouchableOpacity>
+            {isBuyerActionable && canConfirmReceipt && (
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.cancelButton]}
+                  onPress={handleBuyerCancel}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={styles.actionButtonText}>Cancel Order</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.confirmButton]}
+                  onPress={handleConfirmReceipt}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={styles.actionButtonText}>Confirm Receipt</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
 
             <Text style={styles.date}>
-              🕒 {formatDate(notification.createdAt)}
+              {formatDate(notification.createdAt)}
             </Text>
           </View>
         )}
@@ -566,6 +653,10 @@ const styles = StyleSheet.create({
     borderLeftColor: '#FFD700',
     backgroundColor: '#fffdf0',
   },
+  completedContainer: {
+    borderLeftColor: '#00A86B',
+    backgroundColor: '#f0fff4',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -597,7 +688,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  confirmedBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#00A86B',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  completedBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#007AFF',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   crownIcon: {
+    fontSize: 16,
+  },
+  confirmedIcon: {
+    fontSize: 16,
+  },
+  completedIcon: {
     fontSize: 16,
   },
   userText: {
@@ -785,6 +900,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   actionButton: {
+    flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -793,15 +909,15 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     backgroundColor: '#00A86B',
-    flex: 1,
   },
   rejectButton: {
     backgroundColor: '#FF3B30',
-    flex: 1,
   },
   cancelButton: {
     backgroundColor: '#FF9500',
-    marginBottom: 12,
+  },
+  confirmButton: {
+    backgroundColor: '#00A86B',
   },
   actionButtonText: {
     color: 'white',

@@ -1,6 +1,6 @@
-// screens/Chat/chatListScreen.tsx
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -35,6 +35,7 @@ interface Channel {
   lastMessageAt: any;
   createdAt: any;
   type: string;
+  unreadCount: number;
 }
 
 interface AuctionChannel {
@@ -49,6 +50,7 @@ interface AuctionChannel {
   lastBidAt: any;
   createdAt: any;
   isActive: boolean;
+  unreadCount: number;
 }
 
 interface OtherUser {
@@ -71,8 +73,13 @@ interface AuctionChannelWithDetails extends AuctionChannel {
 
 type TabType = 'regular' | 'auction';
 
-// Union type for both channel types
 type AnyChannel = ChannelWithOtherUser | AuctionChannelWithDetails;
+
+interface MessagesResult {
+  success: boolean;
+  messages?: any[];
+  error?: string;
+}
 
 const ChatListScreen = () => {
   const router = useRouter();
@@ -80,28 +87,23 @@ const ChatListScreen = () => {
   
   const [regularChannels, setRegularChannels] = useState<ChannelWithOtherUser[]>([]);
   const [auctionChannels, setAuctionChannels] = useState<AuctionChannelWithDetails[]>([]);
-  const [regularUnreadCount, setRegularUnreadCount] = useState(0);
   const [activeTab, setActiveTab] = useState<TabType>('regular');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load product image for channels
   const loadProductImage = async (productId: string): Promise<string | undefined> => {
     try {
       const result = await getProductById(productId);
-      
       const product = result.product as any;
       if (result.success && product && Array.isArray(product.images) && product.images.length > 0) {
         return product.images[0];
       }
       return undefined;
     } catch (error) {
-      console.error('Error loading product image:', error);
       return undefined;
     }
   };
 
-  // Load auction product image
   const loadAuctionProductImage = async (productInfo: any): Promise<string | undefined> => {
     try {
       if (productInfo?.images && Array.isArray(productInfo.images) && productInfo.images.length > 0) {
@@ -114,34 +116,43 @@ const ChatListScreen = () => {
       
       return undefined;
     } catch (error) {
-      console.error('Error loading auction product image:', error);
       return undefined;
     }
   };
 
-  // Load unread messages count for regular chats
-  const loadUnreadCounts = async () => {
-    if (!currentUser) return;
-
+  const loadChannelUnreadCount = async (channelId: string, userId: string): Promise<number> => {
     try {
-      const regularUnread = await chatService.getUnreadMessagesCount(currentUser.uid);
-      setRegularUnreadCount(regularUnread);
+      let unreadCount = 0;
+      
+      const messagesResult: MessagesResult = await new Promise((resolve) => {
+        const unsubscribe = chatService.getChannelMessages(channelId, (result: MessagesResult) => {
+          resolve(result);
+          unsubscribe();
+        });
+      });
+      
+      if (messagesResult.success && messagesResult.messages) {
+        messagesResult.messages.forEach((message: any) => {
+          if (message.senderId !== userId && 
+              (!message.readBy || !message.readBy.includes(userId))) {
+            unreadCount++;
+          }
+        });
+      }
+      
+      return unreadCount;
     } catch (error) {
-      console.error('Error loading unread counts:', error);
+      return 0;
     }
   };
 
-  // Load regular channels
   const loadRegularChannels = async () => {
     if (!currentUser) return [];
 
     try {
-      console.log('📂 Loading regular channels...');
       const result = await chatService.getUserChannels(currentUser.uid);
       
       if (result.success && result.channels) {
-        console.log(`✅ Found ${result.channels.length} regular channels`);
-        
         const processedChannels: ChannelWithOtherUser[] = [];
         
         for (const channel of result.channels) {
@@ -149,7 +160,6 @@ const ChatListScreen = () => {
             const otherUserId = channel.participants.find((id: string) => id !== currentUser.uid);
             
             if (otherUserId) {
-              console.log('👤 Loading other user data from userService...');
               const tempUser = { uid: otherUserId };
               const userData = await loadUserData(tempUser);
               
@@ -157,10 +167,7 @@ const ChatListScreen = () => {
               let otherUserAvatar: string | undefined = undefined;
 
               if (userData) {
-                otherUserName = userData.fullName || 
-                               userData.displayName || 
-                               userData.email?.split('@')[0] || 
-                               'Unknown User';
+                otherUserName = userData.fullName || 'Unknown User';
                 otherUserAvatar = userData.avatarURL;
               } else {
                 const fallbackData = channel.participantDetails?.[otherUserId];
@@ -173,6 +180,8 @@ const ChatListScreen = () => {
                 productImage = await loadProductImage(channel.productId);
               }
               
+              const unreadCount = await loadChannelUnreadCount(channel.id, currentUser.uid);
+              
               const channelWithOtherUser: ChannelWithOtherUser = {
                 ...channel,
                 otherUser: {
@@ -180,13 +189,13 @@ const ChatListScreen = () => {
                   name: otherUserName,
                   avatar: otherUserAvatar
                 },
-                productImage: productImage
+                productImage: productImage,
+                unreadCount: unreadCount
               };
               
               processedChannels.push(channelWithOtherUser);
             }
           } catch (error) {
-            console.error('Error processing regular channel:', error);
           }
         }
         
@@ -198,26 +207,20 @@ const ChatListScreen = () => {
         
         return processedChannels;
       } else {
-        console.error('Failed to load regular channels:', result.error);
         return [];
       }
     } catch (error) {
-      console.error('Error loading regular channels:', error);
       return [];
     }
   };
 
-  // Load auction channels
   const loadAuctionChannels = async () => {
     if (!currentUser) return [];
 
     try {
-      console.log('🏷️ Loading auction channels...');
       const result = await auctionChatService.getUserAuctionChannels(currentUser.uid);
       
       if (result.success && result.channels) {
-        console.log(`✅ Found ${result.channels.length} auction channels`);
-        
         const processedChannels: AuctionChannelWithDetails[] = [];
         
         for (const channel of result.channels) {
@@ -252,16 +255,18 @@ const ChatListScreen = () => {
               }
             }
             
+            const unreadCount = await loadChannelUnreadCount(channel.id, currentUser.uid);
+            
             const channelWithDetails: AuctionChannelWithDetails = {
               ...channel,
               productImage: productImage,
               timeRemaining: timeRemaining,
-              auctionStatus: auctionStatus
+              auctionStatus: auctionStatus,
+              unreadCount: unreadCount
             };
             
             processedChannels.push(channelWithDetails);
           } catch (error) {
-            console.error('Error processing auction channel:', error);
           }
         }
         
@@ -273,17 +278,16 @@ const ChatListScreen = () => {
         
         return processedChannels;
       } else {
-        console.error('Failed to load auction channels:', result.error);
         return [];
       }
     } catch (error) {
-      console.error('Error loading auction channels:', error);
       return [];
     }
   };
 
-  // Load all channels and unread counts
   const loadAllChannels = async () => {
+    if (!currentUser) return;
+    
     setLoading(true);
     
     const [regularChannelsData, auctionChannelsData] = await Promise.all([
@@ -294,9 +298,6 @@ const ChatListScreen = () => {
     setRegularChannels(regularChannelsData);
     setAuctionChannels(auctionChannelsData);
     
-    // Load unread counts after channels are loaded
-    await loadUnreadCounts();
-    
     setLoading(false);
     setRefreshing(false);
   };
@@ -304,6 +305,12 @@ const ChatListScreen = () => {
   useEffect(() => {
     loadAllChannels();
   }, [currentUser]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAllChannels();
+    }, [currentUser])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -329,17 +336,14 @@ const ChatListScreen = () => {
     });
   };
 
-  // Type guard to check if channel is regular channel
   const isRegularChannel = (channel: AnyChannel): channel is ChannelWithOtherUser => {
     return 'lastMessage' in channel && 'participantDetails' in channel;
   };
 
-  // Type guard to check if channel is auction channel
   const isAuctionChannel = (channel: AnyChannel): channel is AuctionChannelWithDetails => {
     return 'auctionId' in channel && 'currentBid' in channel;
   };
 
-  // Render channel item with type checking
   const renderChannelItem = ({ item }: { item: AnyChannel }) => {
     if (isRegularChannel(item)) {
       return renderRegularChannelItem({ item });
@@ -349,10 +353,9 @@ const ChatListScreen = () => {
     return null;
   };
 
-  // Render regular channel item
   const renderRegularChannelItem = ({ item }: { item: ChannelWithOtherUser }) => {
     const lastMessageTime = item.lastMessageAt ? getTimeAgo(item.lastMessageAt) : 'No messages';
-    const hasUnread = false; // You can implement unread logic per channel here
+    const hasUnread = item.unreadCount > 0;
     
     return (
       <TouchableOpacity 
@@ -379,40 +382,39 @@ const ChatListScreen = () => {
               } 
               style={styles.avatar} 
             />
-            <View style={styles.onlineIndicator} />
+            {hasUnread && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>
+                  {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                </Text>
+              </View>
+            )}
           </View>
           
           <View style={styles.channelInfo}>
             <View style={styles.channelHeader}>
               <View style={styles.nameContainer}>
-                <Text style={styles.userName} numberOfLines={1}>
+                <Text style={[styles.userName, hasUnread && styles.unreadUserName]} numberOfLines={1}>
                   {item.otherUser.name}
                 </Text>
-                {hasUnread && <View style={styles.unreadDot} />}
               </View>
-              <Text style={styles.timeText}>
+              <Text style={[styles.timeText, hasUnread && styles.unreadTimeText]}>
                 {lastMessageTime}
               </Text>
             </View>
             
-            <Text style={styles.lastMessage} numberOfLines={2}>
+            <Text style={[styles.lastMessage, hasUnread && styles.unreadLastMessage]} numberOfLines={2}>
               {item.lastMessage || 'Start a conversation...'}
             </Text>
           </View>
-          
-          {hasUnread && (
-            <View style={styles.messageIndicator}>
-              <View style={styles.unreadBadge} />
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
   };
 
-  // Render auction channel item
   const renderAuctionChannelItem = ({ item }: { item: AuctionChannelWithDetails }) => {
     const lastBidTime = item.lastBidAt ? getTimeAgo(item.lastBidAt) : 'No bids yet';
+    const hasUnread = item.unreadCount > 0;
     
     return (
       <TouchableOpacity 
@@ -438,21 +440,28 @@ const ChatListScreen = () => {
               source={require('../../assets/icons/auction-hammer.gif')}
               style={styles.auctionIcon} 
             />
+            {hasUnread && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>
+                  {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                </Text>
+              </View>
+            )}
           </View>
           
           <View style={styles.channelInfo}>
             <View style={styles.channelHeader}>
               <View style={styles.nameContainer}>
-                <Text style={styles.userName} numberOfLines={1}>
+                <Text style={[styles.userName, hasUnread && styles.unreadUserName]} numberOfLines={1}>
                   Auction Chat
                 </Text>
               </View>
-              <Text style={styles.timeText}>
+              <Text style={[styles.timeText, hasUnread && styles.unreadTimeText]}>
                 {lastBidTime}
               </Text>
             </View>
             
-            <Text style={styles.lastMessage} numberOfLines={1}>
+            <Text style={[styles.lastMessage, hasUnread && styles.unreadLastMessage]} numberOfLines={1}>
               Current bid: {item.currentBid?.toLocaleString()} VND
             </Text>
             
@@ -527,11 +536,6 @@ const ChatListScreen = () => {
           <Text style={[styles.tabText, activeTab === 'regular' && styles.activeTabText]}>
             Regular Chats
           </Text>
-          {regularUnreadCount > 0 && (
-            <View style={styles.tabBadge}>
-              <Text style={styles.tabBadgeText}>{regularUnreadCount}</Text>
-            </View>
-          )}
         </TouchableOpacity>
         
         <TouchableOpacity
@@ -544,7 +548,6 @@ const ChatListScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Channels List */}
       <FlatList<AnyChannel>
         data={getCurrentChannels()}
         renderItem={renderChannelItem}
@@ -581,37 +584,23 @@ const styles = StyleSheet.create({
   headerDecoration: {
     height: 4,
     backgroundColor: '#00A86B',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
   },
-  // Tab Styles - Full width
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 0, // Remove horizontal margin for full width
-    marginVertical: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
   },
   tab: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 16,
-    position: 'relative',
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
   activeTab: {
     borderBottomColor: '#00A86B',
-    backgroundColor: '#F8F9FA',
   },
   tabText: {
     fontSize: 16,
@@ -620,24 +609,6 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: '#00A86B',
-  },
-  tabBadge: {
-    backgroundColor: '#FF4757',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 6,
-    paddingHorizontal: 4,
-    position: 'absolute',
-    top: 5,
-    right: 5,
-  },
-  tabBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   listContent: {
     flexGrow: 1,
@@ -654,9 +625,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#666',
-    fontWeight: '500',
   },
-  // Channel Item
   channelItem: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -677,7 +646,7 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: '100%',
-    height: 80, 
+    height: 80,
     backgroundColor: '#f8f8f8',
   },
   auctionBadge: {
@@ -707,27 +676,31 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: '#F0F0F0',
-    borderWidth: 2,
-    borderColor: '#E8F5E8',
   },
   auctionIcon: {
     width: 60,
     height: 60,
     borderRadius: 30,
     backgroundColor: '#FFF4E6',
-    borderWidth: 2,
-    borderColor: '#FFE8CC',
   },
-  onlineIndicator: {
+  unreadBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#00A86B',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF4757',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
     borderWidth: 2,
     borderColor: '#FFFFFF',
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   channelInfo: {
     flex: 1,
@@ -741,35 +714,35 @@ const styles = StyleSheet.create({
   },
   nameContainer: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     marginRight: 8,
   },
   userName: {
     fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginRight: 8,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#00A86B',
+  unreadUserName: {
+    color: '#000000',
+    fontWeight: '700',
   },
   timeText: {
     fontSize: 14,
     color: '#999',
-    fontWeight: '500',
+  },
+  unreadTimeText: {
+    color: '#00A86B',
+    fontWeight: '600',
   },
   lastMessage: {
     fontSize: 16,
     color: '#666',
     lineHeight: 20,
     marginBottom: 8,
-    fontWeight: '400',
   },
-  // Auction specific styles
+  unreadLastMessage: {
+    color: '#000000',
+    fontWeight: '500',
+  },
   auctionStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -778,7 +751,6 @@ const styles = StyleSheet.create({
   bidCount: {
     fontSize: 14,
     color: '#666',
-    fontWeight: '500',
   },
   timeRemaining: {
     fontSize: 14,
@@ -787,17 +759,6 @@ const styles = StyleSheet.create({
   },
   timeEnded: {
     color: '#FF4757',
-  },
-  messageIndicator: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  unreadBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#00A86B',
   },
   emptyContainer: {
     flex: 1,
@@ -824,7 +785,6 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     lineHeight: 22,
-    fontWeight: '400',
   },
 });
 

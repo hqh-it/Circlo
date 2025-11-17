@@ -62,17 +62,14 @@ const ChatScreen = () => {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const textInputRef = useRef<TextInput>(null);
 
-  // Set status bar for chat screen
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
     StatusBar.setBackgroundColor('#01332fff');
 
     return () => {
-      // Cleanup when component unmounts
     };
   }, []);
 
-  // Keyboard listeners
   useEffect(() => {
     const keyboardDidShow = () => {
       setIsKeyboardVisible(true);
@@ -191,6 +188,48 @@ const ChatScreen = () => {
         params: { id: productData.id }
       });
     }
+  };
+
+  const handleExitChat = async () => {
+    if (!channelId || !currentUser) {
+      return;
+    }
+
+    Alert.alert(
+      'Exit Chat',
+      'Are you sure you want to exit this chat? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Exit Chat',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const exitResult = await chatService.exitChat(channelId, currentUser.uid);
+              
+              if (exitResult.success) {
+                console.log('✅ Exit successful, sending system message...');
+                await chatService.sendSystemMessage(
+                  channelId,
+                  `${currentUserData?.fullName || 'User'} has left the chat`
+                );
+                console.log('✅ System message sent, navigating back...');
+                router.back();
+              } else {
+                console.log('❌ Exit failed:', exitResult.error);
+                Alert.alert('Error', 'Failed to exit chat');
+              }
+            } catch (error) {
+              console.log('❌ Exit error:', error);
+              Alert.alert('Error', 'Failed to exit chat');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const loadOtherUserInfo = async () => {
@@ -342,7 +381,16 @@ const ChatScreen = () => {
 
   const renderMessage = ({ item, index }: { item: ChatMessage; index: number }) => {
     const isMyMessage = item.senderId === currentUser?.uid;
+    const isSystemMessage = item.type === 'system';
     
+    if (isSystemMessage) {
+      return (
+        <View style={styles.systemMessageContainer}>
+          <Text style={styles.systemMessageText}>{item.content}</Text>
+        </View>
+      );
+    }
+
     const showAvatar = index === 0 || 
       messages[index - 1]?.senderId !== item.senderId ||
       new Date(item.timestamp?.toDate?.() || 0).getTime() - 
@@ -478,18 +526,23 @@ const ChatScreen = () => {
             </Text>
           </View>
           
-          <TouchableOpacity style={styles.menuButton}>
-            <Text style={styles.menuButtonText}>⋯</Text>
+          {/* Exit Chat Button - REPLACED the 3 dots */}
+          <TouchableOpacity 
+            style={styles.exitButton}
+            onPress={handleExitChat}
+          >
+            <Image 
+              source={require('../../assets/icons/outchat.png')}
+              style={styles.exitIcon}
+            />
           </TouchableOpacity>
         </View>
 
-        {/* Chat Content */}
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
-          {/* Product Header */}
           {productData && (
             <ProductHeader 
               product={productData}
@@ -498,7 +551,6 @@ const ChatScreen = () => {
             />
           )}
           
-          {/* Messages Area */}
           <View style={[
             styles.chatContent,
             productData && styles.chatContentWithProduct
@@ -540,7 +592,6 @@ const ChatScreen = () => {
               />
             )}
 
-            {/* Input Area */}
             <View style={[
               styles.inputContainer,
               isKeyboardVisible && styles.inputContainerWithKeyboard
@@ -632,13 +683,13 @@ const styles = StyleSheet.create({
     color: "#FFD700",
     marginTop: 2,
   },
-  menuButton: {
+  exitButton: {
     padding: 8,
   },
-  menuButtonText: {
-    fontSize: 24,
-    color: "#FFFFFF",
-    fontWeight: 'bold',
+  exitIcon: {
+    width: 24,
+    height: 24,
+    tintColor:"#f8f8f8"
   },
   chatContent: {
     flex: 1,
@@ -702,6 +753,19 @@ const styles = StyleSheet.create({
   },
   otherMessageContainer: {
     alignItems: 'flex-start',
+  },
+  systemMessageContainer: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  systemMessageText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   otherMessageWrapper: {
     flexDirection: 'row',

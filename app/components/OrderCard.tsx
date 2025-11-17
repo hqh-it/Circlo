@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../../services/Auth/AuthContext';
 import { chatService } from '../../services/Chat/chatService';
 import { DeliveryService } from '../../services/Delivery/deliveryService';
-import { acceptOrderWithPayment, cancelOrder, updateOrderStatus } from '../../services/Order/orderService';
+import { acceptOrderWithPayment, cancelOrder, confirmReceipt, updateOrderStatus } from '../../services/Order/orderService';
 import { formatPrice } from '../../services/Product/productService';
 import AcceptOrderModal from '../components/AcceptOrderModal';
 
@@ -66,6 +66,7 @@ interface Order {
   orderType?: 'normal' | 'auction';
   auctionId?: string;
   winnerInfo?: WinnerInfo;
+  buyerConfirmed?: boolean;
   createdAt: any;
   updatedAt: any;
 }
@@ -156,6 +157,9 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
           break;
         case 'cancel':
           result = await cancelOrder(order.id, user.uid);
+          break;
+        case 'confirm_receipt':
+          result = await confirmReceipt(order.id);
           break;
         default:
           return;
@@ -298,12 +302,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
               </View>
               
               <Text style={styles.bankText}>Holder: {order.sellerBankAccount.accountHolder}</Text>
-              
-              {order.paymentPercentage && (
-                <Text style={styles.paymentPercentage}>
-                  Advance Payment: {order.paymentPercentage}%
-                </Text>
-              )}
             </View>
 
             {order.sellerNote && (
@@ -358,17 +356,33 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
       case 'accepted':
       case 'waiting_payment':
         return (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.contactButton]}
-            onPress={handleContact}
-            disabled={contactLoading}
-          >
-            {contactLoading ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={styles.actionButtonText}>Contact Seller</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.cancelButton]}
+              onPress={() => handleAction('cancel')}
+              disabled={loading}
+            >
+              <Text style={styles.actionButtonText}>Cancel Order</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.confirmButton]}
+              onPress={() => handleAction('confirm_receipt')}
+              disabled={loading}
+            >
+              <Text style={styles.actionButtonText}>Confirm Receipt</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.contactButton]}
+              onPress={handleContact}
+              disabled={contactLoading}
+            >
+              {contactLoading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={styles.actionButtonText}>Contact Seller</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         );
       
       case 'completed':
@@ -401,6 +415,8 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   const renderSellerActions = () => {
     if (!isSeller) return null;
 
+    const canComplete = order.buyerConfirmed === true;
+
     switch (order.status) {
       case 'pending':
         return (
@@ -427,11 +443,13 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
         return (
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton]}
+              style={[styles.actionButton, canComplete ? styles.completeButton : styles.disabledButton]}
               onPress={() => handleAction('complete')}
-              disabled={loading}
+              disabled={loading || !canComplete}
             >
-              <Text style={styles.actionButtonText}>Complete</Text>
+              <Text style={styles.actionButtonText}>
+                {canComplete ? 'Complete' : 'Waiting Buyer Confirmation'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.contactButton]}
@@ -753,12 +771,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 4,
   },
-  paymentPercentage: {
-    fontSize: 13,
-    color: '#00A86B',
-    fontWeight: '600',
-    marginTop: 4,
-  },
   accountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -829,6 +841,12 @@ const styles = StyleSheet.create({
   },
   reviewButton: {
     backgroundColor: '#FF2D55',
+  },
+  confirmButton: {
+    backgroundColor: '#00A86B',
+  },
+  disabledButton: {
+    backgroundColor: '#8E8E93',
   },
   actionButtonText: {
     color: 'white',

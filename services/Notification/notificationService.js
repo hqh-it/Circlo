@@ -238,21 +238,19 @@ export const notificationService = {
           data: order
         });
       } else if (type === 'auction_won') {
-        // Kiểm tra notification đã tồn tại chưa
         const existingNotifications = await this.getNotificationsByOrderId(order.id);
         if (existingNotifications.length > 0) {
-          console.log('📢 Notifications already exist for order:', order.id);
+          console.log('Notifications already exist for order:', order.id);
           return true;
         }
 
-        // CHỈ tạo 2 thông báo: 1 cho winner và 1 cho seller
         notificationsToCreate.push({
           type: 'auction_won',
           userId: order.buyerId,
           relatedUserId: order.sellerId,
           relatedOrderId: order.id,
           relatedProductId: order.productId,
-          title: '🎉 Auction Won!',
+          title: 'Auction Won!',
           message: `Congratulations! You won the auction for "${order.productSnapshot?.title}"`,
           data: order
         });
@@ -263,7 +261,7 @@ export const notificationService = {
           relatedUserId: order.buyerId,
           relatedOrderId: order.id,
           relatedProductId: order.productId,
-          title: '🏆 Auction Completed',
+          title: 'Auction Completed',
           message: `Your auction for "${order.productSnapshot?.title}" has ended. Winner: ${order.winnerInfo?.displayName || 'User'}`,
           data: order
         });
@@ -271,7 +269,7 @@ export const notificationService = {
         await this.deleteNotificationsByOrderId(order.id);
 
         notificationsToCreate.push({
-          type: 'order_accepted',
+          type: 'order_accepted_buyer',
           userId: order.buyerId,
           relatedUserId: order.sellerId,
           relatedOrderId: order.id,
@@ -280,11 +278,22 @@ export const notificationService = {
           message: `Your purchase request for "${order.productSnapshot?.title}" has been accepted`,
           data: { ...order, status: 'accepted' }
         });
+
+        notificationsToCreate.push({
+          type: 'order_accepted_seller',
+          userId: order.sellerId,
+          relatedUserId: order.buyerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Order Accepted',
+          message: `You accepted order for "${order.productSnapshot?.title}"`,
+          data: { ...order, status: 'accepted' }
+        });
       } else if (type === 'order_rejected') {
         await this.deleteNotificationsByOrderId(order.id);
 
         notificationsToCreate.push({
-          type: 'order_rejected',
+          type: 'order_rejected_buyer',
           userId: order.buyerId,
           relatedUserId: order.sellerId,
           relatedOrderId: order.id,
@@ -293,11 +302,22 @@ export const notificationService = {
           message: `Your purchase request for "${order.productSnapshot?.title}" has been rejected`,
           data: { ...order, status: 'rejected' }
         });
+
+        notificationsToCreate.push({
+          type: 'order_rejected_seller',
+          userId: order.sellerId,
+          relatedUserId: order.buyerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Order Rejected',
+          message: `You rejected order for "${order.productSnapshot?.title}"`,
+          data: { ...order, status: 'rejected' }
+        });
       } else if (type === 'order_cancelled') {
         await this.deleteNotificationsByOrderId(order.id);
 
         notificationsToCreate.push({
-          type: 'order_cancelled',
+          type: 'order_cancelled_buyer',
           userId: order.buyerId,
           relatedUserId: order.sellerId,
           relatedOrderId: order.id,
@@ -306,17 +326,87 @@ export const notificationService = {
           message: `You cancelled purchase for "${order.productSnapshot?.title}"`,
           data: { ...order, status: 'cancelled' }
         });
+
+        notificationsToCreate.push({
+          type: 'order_cancelled_seller',
+          userId: order.sellerId,
+          relatedUserId: order.buyerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Order Cancelled',
+          message: `Buyer cancelled order for "${order.productSnapshot?.title}"`,
+          data: { ...order, status: 'cancelled' }
+        });
       } else if (type === 'order_accepted_with_payment') {
         await this.deleteNotificationsByOrderId(order.id);
 
         notificationsToCreate.push({
-          type: 'order_accepted_with_payment',
+          type: 'order_accepted_with_payment_buyer',
           userId: order.buyerId,
           relatedUserId: order.sellerId,
           relatedOrderId: order.id,
           relatedProductId: order.productId,
           title: 'Payment Information',
           message: `Your order for "${order.productSnapshot?.title}" has been accepted. Check payment details.`,
+          data: order
+        });
+
+        notificationsToCreate.push({
+          type: 'order_accepted_with_payment_seller',
+          userId: order.sellerId,
+          relatedUserId: order.buyerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Order Accepted',
+          message: `You accepted order for "${order.productSnapshot?.title}" with payment request`,
+          data: order
+        });
+      } else if (type === 'order_completed') {
+        await this.deleteNotificationsByOrderId(order.id);
+
+        notificationsToCreate.push({
+          type: 'order_completed_buyer',
+          userId: order.buyerId,
+          relatedUserId: order.sellerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Order Completed',
+          message: `Your order for "${order.productSnapshot?.title}" has been completed successfully!`,
+          data: { ...order, status: 'completed' }
+        });
+
+        notificationsToCreate.push({
+          type: 'order_completed_seller',
+          userId: order.sellerId,
+          relatedUserId: order.buyerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Order Completed',
+          message: `Your order for "${order.productSnapshot?.title}" has been completed successfully!`,
+          data: { ...order, status: 'completed' }
+        });
+      } else if (type === 'order_receipt_confirmed') {
+        await this.deleteNotificationsByOrderId(order.id);
+
+        notificationsToCreate.push({
+          type: 'order_receipt_confirmed_buyer',
+          userId: order.buyerId,
+          relatedUserId: order.sellerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Receipt Confirmed',
+          message: `You confirmed receipt of "${order.productSnapshot?.title}". Order completed!`,
+          data: order
+        });
+
+        notificationsToCreate.push({
+          type: 'order_receipt_confirmed_seller',
+          userId: order.sellerId,
+          relatedUserId: order.buyerId,
+          relatedOrderId: order.id,
+          relatedProductId: order.productId,
+          title: 'Buyer Confirmed Receipt',
+          message: `Buyer confirmed receipt of "${order.productSnapshot?.title}". You can now complete the order.`,
           data: order
         });
       }
@@ -326,7 +416,7 @@ export const notificationService = {
       );
       
       await Promise.all(createPromises);
-      console.log('✅ Created notifications for order:', order.id);
+      console.log('Created notifications for order:', order.id);
       return true;
     } catch (error) {
       console.error('Error creating order notification:', error);
