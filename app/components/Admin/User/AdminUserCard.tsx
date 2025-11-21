@@ -1,15 +1,15 @@
 import { useRouter } from 'expo-router';
-import { doc, updateDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { db } from '../../../../firebaseConfig';
+import { activateUser, banUser, deactivateUser, unbanUser } from '../../../../services/Admin/AdminUserService';
+import SuspensionModal from './SuspensionModal';
 
 interface User {
   id: string;
@@ -18,6 +18,10 @@ interface User {
   avatarURL?: string;
   role?: string;
   isActive?: boolean;
+  isBanned?: boolean;
+  isSuspended?: boolean;
+  suspendReason?: string;
+  suspendedUntil?: any;
 }
 
 interface AdminUserCardProps {
@@ -28,6 +32,11 @@ interface AdminUserCardProps {
 const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => {
   const router = useRouter();
   const [updating, setUpdating] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
+
+  const isBanned = user.isBanned === true;
+  const isSuspended = user.isSuspended === true;
+  const isAdmin = user.role === 'admin';
 
   const handleViewProfile = () => {
     router.push({
@@ -39,82 +48,52 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     });
   };
 
-  const handleToggleStatus = async () => {
-    if (user.role === 'admin') {
+  const handleManageUser = () => {
+    if (isAdmin) {
       Alert.alert('Restricted Action', 'Cannot modify other administrator accounts.');
       return;
     }
-
-    const action = user.isActive !== false ? 'deactivate' : 'activate';
-    
-    Alert.alert(
-      `Confirm ${action}`,
-      `Are you sure you want to ${action} ${user.fullName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: `Yes, ${action}`, 
-          style: 'destructive',
-          onPress: executeToggleStatus
-        }
-      ]
-    );
+    setShowActionModal(true);
   };
 
-  const executeToggleStatus = async () => {
+  const handleConfirmAction = async (reason: string, duration: number, customReason?: string) => {
     setUpdating(true);
     try {
-      await updateDoc(doc(db, "users", user.id), {
-        isActive: !user.isActive,
-        updatedAt: new Date()
-      });
-      onUserUpdate();
+      const finalReason = customReason || reason;
+      const result = await deactivateUser(user.id, finalReason, duration);
+      if (result.success) {
+        Alert.alert('Success', result.message);
+        onUserUpdate();
+      } else {
+        Alert.alert('Error', result.error);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update user status');
+      Alert.alert('Error', 'Failed to perform action');
     } finally {
       setUpdating(false);
+      setShowActionModal(false);
     }
   };
 
-  const handleChangeRole = async () => {
-    if (user.role === 'admin') {
-      Alert.alert('Restricted Action', 'Cannot modify roles of administrator accounts.');
-      return;
-    }
-
-    const newRole = user.role === 'user' ? 'moderator' : 'user';
-    const roleText = newRole === 'moderator' ? 'Moderator' : 'User';
-    
-    Alert.alert(
-      'Change User Role',
-      `Change ${user.fullName}'s role to ${roleText}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: `Make ${roleText}`, 
-          onPress: () => executeChangeRole(newRole)
-        }
-      ]
-    );
-  };
-
-  const executeChangeRole = async (newRole: string) => {
+  const handleActivate = async () => {
     setUpdating(true);
     try {
-      await updateDoc(doc(db, "users", user.id), {
-        role: newRole,
-        updatedAt: new Date()
-      });
-      onUserUpdate();
+      const result = await activateUser(user.id);
+      if (result.success) {
+        Alert.alert('Success', result.message);
+        onUserUpdate();
+      } else {
+        Alert.alert('Error', result.error);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update user role');
+      Alert.alert('Error', 'Failed to activate user');
     } finally {
       setUpdating(false);
     }
   };
 
   const handleBanUser = () => {
-    if (user.role === 'admin') {
+    if (isAdmin) {
       Alert.alert('Restricted Action', 'Cannot ban administrator accounts.');
       return;
     }
@@ -136,13 +115,13 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
   const executeBanUser = async () => {
     setUpdating(true);
     try {
-      await updateDoc(doc(db, "users", user.id), {
-        isBanned: true,
-        isActive: false,
-        bannedAt: new Date(),
-        updatedAt: new Date()
-      });
-      onUserUpdate();
+      const result = await banUser(user.id, "Manual ban by administrator");
+      if (result.success) {
+        Alert.alert('Success', result.message);
+        onUserUpdate();
+      } else {
+        Alert.alert('Error', result.error);
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to ban user');
     } finally {
@@ -150,18 +129,50 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     }
   };
 
-  const handleViewActivity = () => {
-    Alert.alert('User Activity', `View activity logs for ${user.fullName}`);
+  const handleUnbanUser = () => {
+    Alert.alert(
+      'Unban User Account',
+      `Unban ${user.fullName}? This will restore their account access.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Unban User', 
+          style: 'default',
+          onPress: executeUnbanUser
+        }
+      ]
+    );
+  };
+
+  const executeUnbanUser = async () => {
+    setUpdating(true);
+    try {
+      const result = await unbanUser(user.id);
+      if (result.success) {
+        Alert.alert('Success', result.message);
+        onUserUpdate();
+      } else {
+        Alert.alert('Error', result.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to unban user');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const getStatusColor = () => {
-    if (user.role === 'admin') return '#00A86B';
-    return user.isActive !== false ? '#00A86B' : '#ff4444';
+    if (isBanned) return '#dc3545';
+    if (isSuspended) return '#ff8800';
+    if (isAdmin) return '#00A86B';
+    return '#00A86B';
   };
 
   const getStatusText = () => {
-    if (user.role === 'admin') return 'Administrator';
-    return user.isActive !== false ? 'Active' : 'Inactive';
+    if (isBanned) return 'Banned';
+    if (isSuspended) return 'Suspended';
+    if (isAdmin) return 'Administrator';
+    return 'Active';
   };
 
   const getRoleText = () => {
@@ -172,20 +183,50 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     }
   };
 
+  const getSuspensionInfo = () => {
+    if (!isSuspended) return null;
+    
+    let info = `Reason: ${user.suspendReason || 'No reason provided'}`;
+    
+    if (user.suspendedUntil) {
+      const untilDate = user.suspendedUntil.toDate ? user.suspendedUntil.toDate() : new Date(user.suspendedUntil);
+      info += `\nUntil: ${untilDate.toLocaleDateString()}`;
+    } else {
+      info += `\nDuration: Permanent`;
+    }
+    
+    return info;
+  };
+
+  const showBanButton = !isAdmin && !isBanned && !isSuspended;
+  const showUnbanButton = !isAdmin && isBanned;
+  const showManageButton = !isAdmin && !isBanned && !isSuspended;
+  const showActivateButton = !isAdmin && !isBanned && isSuspended;
+
   return (
-    <View style={styles.card}>
+    <View style={[
+      styles.card,
+      isBanned && styles.bannedCard,
+      isSuspended && styles.suspendedCard
+    ]}>
       <View style={styles.userInfo}>
         <Image
           source={
             user.avatarURL
               ? { uri: user.avatarURL }
-              : require('../../../sets/icons/profile-picture.png')
+              : require('../../../assets/icons/profile-picture.png')
           }
           style={styles.avatar}
         />
         <View style={styles.userDetails}>
-          <Text style={styles.userName} numberOfLines={1}>
+          <Text style={[
+            styles.userName,
+            isBanned && styles.bannedText,
+            isSuspended && styles.suspendedText
+          ]} numberOfLines={1}>
             {user.fullName}
+            {isBanned && ' 🚫'}
+            {isSuspended && ' ⚠️'}
           </Text>
           <Text style={styles.userEmail} numberOfLines={1}>
             {user.email}
@@ -195,6 +236,11 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
             <Text style={styles.statusText}>{getStatusText()}</Text>
             <Text style={styles.roleText}> • {getRoleText()}</Text>
           </View>
+          {isSuspended && getSuspensionInfo() && (
+            <Text style={styles.suspensionInfo}>
+              {getSuspensionInfo()}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -206,57 +252,73 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
           <Text style={styles.viewButtonText}>View Profile</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={handleViewActivity}
-        >
-          <Text style={styles.actionButtonText}>Activity</Text>
-        </TouchableOpacity>
+        {showManageButton && (
+          <TouchableOpacity 
+            style={[
+              styles.manageButton,
+              updating && styles.disabledButton
+            ]}
+            onPress={handleManageUser}
+            disabled={updating}
+          >
+            <Text style={styles.buttonText}>
+              Manage User
+            </Text>
+          </TouchableOpacity>
+        )}
 
-        {user.role !== 'admin' && (
-          <>
-            <TouchableOpacity 
-              style={[
-                styles.actionButton, 
-                styles.roleButton,
-                updating && styles.disabledButton
-              ]}
-              onPress={handleChangeRole}
-              disabled={updating}
-            >
-              <Text style={styles.actionButtonText}>
-                {user.role === 'user' ? 'Make Moderator' : 'Make User'}
-              </Text>
-            </TouchableOpacity>
+        {showActivateButton && (
+          <TouchableOpacity 
+            style={[
+              styles.activateButton,
+              updating && styles.disabledButton
+            ]}
+            onPress={handleActivate}
+            disabled={updating}
+          >
+            <Text style={styles.buttonText}>
+              Activate
+            </Text>
+          </TouchableOpacity>
+        )}
 
-            <TouchableOpacity 
-              style={[
-                styles.actionButton, 
-                user.isActive !== false ? styles.deactivateButton : styles.activateButton,
-                updating && styles.disabledButton
-              ]}
-              onPress={handleToggleStatus}
-              disabled={updating}
-            >
-              <Text style={styles.actionButtonText}>
-                {user.isActive !== false ? 'Deactivate' : 'Activate'}
-              </Text>
-            </TouchableOpacity>
+        {showBanButton && (
+          <TouchableOpacity 
+            style={[
+              styles.banButton,
+              updating && styles.disabledButton
+            ]}
+            onPress={handleBanUser}
+            disabled={updating}
+          >
+            <Text style={styles.buttonText}>
+              Ban
+            </Text>
+          </TouchableOpacity>
+        )}
 
-            <TouchableOpacity 
-              style={[
-                styles.actionButton, 
-                styles.banButton,
-                updating && styles.disabledButton
-              ]}
-              onPress={handleBanUser}
-              disabled={updating}
-            >
-              <Text style={styles.actionButtonText}>Ban</Text>
-            </TouchableOpacity>
-          </>
+        {showUnbanButton && (
+          <TouchableOpacity 
+            style={[
+              styles.unbanButton,
+              updating && styles.disabledButton
+            ]}
+            onPress={handleUnbanUser}
+            disabled={updating}
+          >
+            <Text style={styles.buttonText}>
+              Unban
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
+
+      <SuspensionModal
+        visible={showActionModal}
+        onClose={() => setShowActionModal(false)}
+        onConfirm={handleConfirmAction}
+        userName={user.fullName}
+      />
     </View>
   );
 };
@@ -274,6 +336,14 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderLeftWidth: 4,
     borderLeftColor: '#00A86B',
+  },
+  bannedCard: {
+    borderLeftColor: '#dc3545',
+    backgroundColor: '#fff5f5',
+  },
+  suspendedCard: {
+    borderLeftColor: '#ff8800',
+    backgroundColor: '#fffaf0',
   },
   userInfo: {
     flexDirection: 'row',
@@ -295,6 +365,12 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 2,
   },
+  bannedText: {
+    color: '#dc3545',
+  },
+  suspendedText: {
+    color: '#ff8800',
+  },
   userEmail: {
     fontSize: 14,
     color: '#666',
@@ -303,6 +379,7 @@ const styles = StyleSheet.create({
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4,
   },
   statusDot: {
     width: 8,
@@ -319,52 +396,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  suspensionInfo: {
+    fontSize: 11,
+    color: '#ff8800',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 8,
   },
   viewButton: {
     backgroundColor: '#2196F3',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 6,
-    minWidth: 80,
   },
   viewButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
-    textAlign: 'center',
   },
-  actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  manageButton: {
+    backgroundColor: '#ff8800',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 6,
-    minWidth: 70,
-  },
-  roleButton: {
-    backgroundColor: '#FF9800',
-  },
-  deactivateButton: {
-    backgroundColor: '#ff4444',
   },
   activateButton: {
     backgroundColor: '#00A86B',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
   },
   banButton: {
     backgroundColor: '#dc3545',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  unbanButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
   },
   disabledButton: {
     opacity: 0.6,
   },
-  actionButtonText: {
+  buttonText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    textAlign: 'center',
   },
 });
 

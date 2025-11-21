@@ -1,10 +1,11 @@
+// Login.tsx
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import React, { useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../../firebaseConfig";
 
 const {height, width} = Dimensions.get("window");
@@ -15,6 +16,47 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const checkUserStatus = async (userId: string) => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const isBanned = userData?.isBanned === true;
+        const isSuspended = userData?.isSuspended === true;
+        const suspendedUntil = userData?.suspendedUntil?.toDate();
+        
+        if (isBanned) {
+          return { 
+            allowed: false, 
+            message: "This account has been permanently banned. Please contact support." 
+          };
+        }
+        
+        if (isSuspended && suspendedUntil) {
+          const now = new Date();
+          if (now < suspendedUntil) {
+            return { 
+              allowed: false, 
+              message: `Your account is suspended until ${suspendedUntil.toLocaleDateString()}. Reason: ${userData.suspendReason || 'Violation of terms'}` 
+            };
+          } else {
+            await updateDoc(doc(db, "users", userId), {
+              isSuspended: false,
+              suspendReason: null,
+              suspendedUntil: null,
+              isActive: true,
+              updatedAt: new Date()
+            });
+          }
+        }
+      }
+      return { allowed: true };
+    } catch (error) {
+      console.error('Error checking user status:', error);
+      return { allowed: true };
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -27,6 +69,13 @@ export default function Login() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+
+      const statusCheck = await checkUserStatus(user.uid);
+      if (!statusCheck.allowed) {
+        await auth.signOut();
+        alert(statusCheck.message);
+        return;
+      }
 
       const userDoc = await getDoc(doc(db, "users", user.uid));
       const userData = userDoc.data();

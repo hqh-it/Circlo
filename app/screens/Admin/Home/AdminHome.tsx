@@ -1,9 +1,10 @@
+// screens/Admin/AdminHome.tsx
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import React from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../../../firebaseConfig";
 
 const {height, width} = Dimensions.get("window");
@@ -21,13 +22,19 @@ export default function AdminHome() {
   };
 
   const handleManageUsers = () => {
-    // Sau này sẽ điều hướng đến trang quản lý users
-    alert("Tính năng quản lý users sẽ được phát triển sau!");
+    router.push("/screens/Admin/User/AdminUserList");
   };
 
   const handleManageProducts = () => {
-    // Sau này sẽ điều hướng đến trang quản lý sản phẩm
-    alert("Tính năng quản lý sản phẩm sẽ được phát triển sau!");
+    alert("Product management feature coming soon!");
+  };
+
+  const handleManageAuctions = () => {
+    alert("Auction management feature coming soon!");
+  };
+
+  const handleViewReports = () => {
+    alert("Reports feature coming soon!");
   };
 
   return (
@@ -38,27 +45,24 @@ export default function AdminHome() {
       style={styles.gradient}
     >
       <SafeAreaView style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Image 
             style={styles.logo} 
             source={require('../../../assets/images/logo.png')}
           />
           <Text style={styles.adminTitle}>👑 ADMIN DASHBOARD</Text>
-          <Text style={styles.welcomeText}>Chào mừng Admin!</Text>
+          <Text style={styles.welcomeText}>Welcome Administrator!</Text>
         </View>
 
-        {/* Admin Features */}
         <View style={styles.featuresContainer}>
-          <Text style={styles.sectionTitle}>QUẢN LÝ HỆ THỐNG</Text>
+          <Text style={styles.sectionTitle}>SYSTEM MANAGEMENT</Text>
           
-          {/* Feature Buttons */}
           <TouchableOpacity style={styles.featureButton} onPress={handleManageUsers}>
             <LinearGradient
               colors={["#4CAF50", "#45a049"]}
               style={styles.gradientButton}
             >
-              <Text style={styles.featureText}>👥 Quản lý Người dùng</Text>
+              <Text style={styles.featureText}>👥 User Management</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -67,42 +71,40 @@ export default function AdminHome() {
               colors={["#2196F3", "#1976D2"]}
               style={styles.gradientButton}
             >
-              <Text style={styles.featureText}>📦 Quản lý Sản phẩm</Text>
+              <Text style={styles.featureText}>📦 Product Management</Text>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.featureButton}>
+          <TouchableOpacity style={styles.featureButton} onPress={handleManageAuctions}>
             <LinearGradient
               colors={["#FF9800", "#F57C00"]}
               style={styles.gradientButton}
             >
-              <Text style={styles.featureText}>⚡ Quản lý Đấu giá</Text>
+              <Text style={styles.featureText}>⚡ Auction Management</Text>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.featureButton}>
+          <TouchableOpacity style={styles.featureButton} onPress={handleViewReports}>
             <LinearGradient
               colors={["#9C27B0", "#7B1FA2"]}
               style={styles.gradientButton}
             >
-              <Text style={styles.featureText}>📊 Thống kê & Báo cáo</Text>
+              <Text style={styles.featureText}>📊 Reports & Analytics</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <LinearGradient
             colors={["#ff4444", "#cc0000"]}
             style={styles.gradientButton}
           >
-            <Text style={styles.logoutText}>🚪 Đăng xuất</Text>
+            <Text style={styles.logoutText}>🚪 Logout</Text>
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Footer Info */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Quyền hạn: Administrator</Text>
+          <Text style={styles.footerText}>Role: Administrator</Text>
           <Text style={styles.footerText}>Email: {auth.currentUser?.email}</Text>
         </View>
       </SafeAreaView>

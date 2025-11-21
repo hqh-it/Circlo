@@ -21,6 +21,10 @@ interface User {
   role?: string;
   createdAt?: any;
   isActive?: boolean;
+  isBanned?: boolean;
+  isSuspended?: boolean;
+  suspendReason?: string;
+  suspendedUntil?: any;
 }
 
 const AdminUserList: React.FC = () => {
@@ -47,13 +51,17 @@ const AdminUserList: React.FC = () => {
           avatarURL: data.avatarURL,
           role: data.role || 'user',
           createdAt: data.createdAt,
-          isActive: data.isActive !== false
+          isActive: data.isActive !== false,
+          isBanned: data.isBanned === true,
+          isSuspended: data.isSuspended === true,
+          suspendReason: data.suspendReason,
+          suspendedUntil: data.suspendedUntil
         });
       });
       
       setUsers(usersList);
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error("Load users error:", error);
       alert('Failed to load users');
     } finally {
       setLoading(false);
@@ -71,7 +79,7 @@ const AdminUserList: React.FC = () => {
   };
 
   const handleUserUpdate = () => {
-    loadUsers(); // Refresh list after user update
+    loadUsers();
   };
 
   if (loading) {
@@ -83,6 +91,10 @@ const AdminUserList: React.FC = () => {
     );
   }
 
+  const suspendedUsers = users.filter(user => user.isSuspended && !user.isBanned);
+  const bannedUsers = users.filter(user => user.isBanned);
+  const activeUsers = users.filter(user => !user.isSuspended && !user.isBanned);
+
   return (
     <SafeAreaView style={styles.container}>
       <Header title="User Management" />
@@ -92,8 +104,10 @@ const AdminUserList: React.FC = () => {
           Total Users: {users.length}
         </Text>
         <Text style={styles.counterSubText}>
-          {users.filter(user => user.role === 'admin').length} admin(s), 
-          {users.filter(user => user.role === 'user').length} user(s)
+          {activeUsers.length} active, {suspendedUsers.length} suspended, {bannedUsers.length} banned
+        </Text>
+        <Text style={styles.counterSubText}>
+          {users.filter(user => user.role === 'admin').length} admin(s)
         </Text>
       </View>
 

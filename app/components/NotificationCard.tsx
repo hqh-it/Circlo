@@ -111,6 +111,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const isReceiptConfirmedBuyer = notification.type === 'order_receipt_confirmed_buyer';
   const isReceiptConfirmedSeller = notification.type === 'order_receipt_confirmed_seller';
   const isOrderCompleted = notification.type === 'order_completed_buyer' || notification.type === 'order_completed_seller';
+  const isAdminWarning = notification.type === 'admin_warning';
+  const isAdminAction = notification.type === 'admin_action';
 
   useEffect(() => {
     const loadUserDataForNotification = async () => {
@@ -409,7 +411,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
-    if (otherUserData && !isAuctionNotification && !isReceiptConfirmedBuyer && !isReceiptConfirmedSeller && !isOrderCompleted) {
+    if (otherUserData && !isAuctionNotification && !isReceiptConfirmedBuyer && !isReceiptConfirmedSeller && !isOrderCompleted && !isAdminWarning && !isAdminAction) {
       const userRole = isSellerNotification ? 'Buyer' : 'Seller';
       const userId = isSellerNotification ? notification.data?.buyerId : notification.data?.sellerId;
       
@@ -485,6 +487,20 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
+    if (isAdminWarning || isAdminAction) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.adminBadge}>
+            <Text style={styles.adminIcon}>⚡</Text>
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>System Notification</Text>
+            <Text style={styles.userName}>Administrator</Text>
+          </View>
+        </View>
+      );
+    }
+
     return null;
   };
 
@@ -504,7 +520,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           !notification.isRead && styles.unreadContainer,
           (isSellerActionable || isBuyerActionable) && styles.actionableContainer,
           isAuctionWon && styles.auctionContainer,
-          (isReceiptConfirmedBuyer || isReceiptConfirmedSeller || isOrderCompleted) && styles.completedContainer
+          (isReceiptConfirmedBuyer || isReceiptConfirmedSeller || isOrderCompleted) && styles.completedContainer,
+          (isAdminWarning || isAdminAction) && styles.adminContainer
         ]}
         onPress={markAsRead}
       >
@@ -513,7 +530,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             {renderUserInfo()}
             
             <View style={styles.productSection}>
-              {order?.productSnapshot?.images?.[0] && (
+              {order?.productSnapshot?.images?.[0] && !isAdminWarning && !isAdminAction && (
                 <Image 
                   source={{ uri: order.productSnapshot.images[0] }} 
                   style={styles.productImage}
@@ -522,15 +539,17 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               <View style={styles.productInfo}>
                 <Text style={styles.title}>{notification.title}</Text>
                 <Text style={styles.message}>{notification.message}</Text>
-                <View style={styles.productDetails}>
-                  <Text style={styles.productName} numberOfLines={2}>
-                    {order?.productSnapshot?.title || ''}
-                  </Text>
-                  <Text style={styles.productPrice}>
-                    {formatPrice(order?.productSnapshot?.price || 0)}
-                    {isAuctionWon && <Text style={styles.auctionPrice}> (Winning Bid)</Text>}
-                  </Text>
-                </View>
+                {!isAdminWarning && !isAdminAction && (
+                  <View style={styles.productDetails}>
+                    <Text style={styles.productName} numberOfLines={2}>
+                      {order?.productSnapshot?.title || ''}
+                    </Text>
+                    <Text style={styles.productPrice}>
+                      {formatPrice(order?.productSnapshot?.price || 0)}
+                      {isAuctionWon && <Text style={styles.auctionPrice}> (Winning Bid)</Text>}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           </View>
@@ -538,7 +557,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           {!notification.isRead && <View style={styles.unreadDot} />}
         </View>
         
-        {order && (
+        {order && !isAdminWarning && !isAdminAction && (
           <View style={styles.orderInfo}>
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Status:</Text>
@@ -608,19 +627,29 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           </View>
         )}
 
-        <AcceptOrderModal
-          visible={showAcceptModal}
-          onClose={() => setShowAcceptModal(false)}
-          onAccept={handleAcceptWithPayment}
-          order={notification.data}
-          bankAccounts={currentUserData?.bankAccounts || []}
-          loading={actionLoading}
-        />
+        {(isAdminWarning || isAdminAction) && (
+          <View style={styles.orderInfo}>
+            <Text style={styles.date}>
+              {formatDate(notification.createdAt)}
+            </Text>
+          </View>
+        )}
+
+        {showAcceptModal && !isAdminWarning && !isAdminAction && (
+          <AcceptOrderModal
+            visible={showAcceptModal}
+            onClose={() => setShowAcceptModal(false)}
+            onAccept={handleAcceptWithPayment}
+            order={notification.data}
+            bankAccounts={currentUserData?.bankAccounts || []}
+            loading={actionLoading}
+          />
+        )}
       </TouchableOpacity>
     );
   };
 
-  if (isBuyerNotification || isSellerNotification || isAuctionNotification) {
+  if (isBuyerNotification || isSellerNotification || isAuctionNotification || isAdminWarning || isAdminAction) {
     return renderNotificationContent();
   }
 
@@ -656,6 +685,10 @@ const styles = StyleSheet.create({
   completedContainer: {
     borderLeftColor: '#00A86B',
     backgroundColor: '#f0fff4',
+  },
+  adminContainer: {
+    borderLeftColor: '#FF6B35',
+    backgroundColor: '#fff5f5',
   },
   header: {
     flexDirection: 'row',
@@ -706,6 +739,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  adminBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FF6B35',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   crownIcon: {
     fontSize: 16,
   },
@@ -713,6 +755,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   completedIcon: {
+    fontSize: 16,
+  },
+  adminIcon: {
     fontSize: 16,
   },
   userText: {
