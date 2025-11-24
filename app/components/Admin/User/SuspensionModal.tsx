@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// components/Admin/User/SuspensionModal.tsx
+import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -23,7 +24,8 @@ interface SuspensionModalProps {
   onClose: () => void;
   onConfirm: (reason: string, duration: number, customReason?: string) => void;
   userName: string;
-  actionType?: 'warning' | 'deactivate';
+  preSelectedReason?: string;
+  preSelectedLevel?: string;
 }
 
 const suspensionReasons: SuspensionReason[] = [
@@ -126,11 +128,28 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
   onClose,
   onConfirm,
   userName,
-  actionType = 'deactivate'
+  preSelectedReason,
+  preSelectedLevel
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<'WARNING' | 'LOW' | 'MEDIUM' | 'HIGH' | 'PERMANENT'>('WARNING');
   const [selectedReason, setSelectedReason] = useState<SuspensionReason | null>(null);
   const [customDuration, setCustomDuration] = useState<string>('');
+
+  useEffect(() => {
+    if (preSelectedLevel) {
+      const level = preSelectedLevel as 'WARNING' | 'LOW' | 'MEDIUM' | 'HIGH' | 'PERMANENT';
+      setSelectedLevel(level);
+      
+      if (preSelectedReason) {
+        const reason = suspensionReasons.find(r => 
+          r.label === preSelectedReason && r.level === level
+        );
+        if (reason) {
+          setSelectedReason(reason);
+        }
+      }
+    }
+  }, [preSelectedReason, preSelectedLevel]);
 
   const filteredReasons = suspensionReasons.filter(reason => reason.level === selectedLevel);
 
@@ -160,13 +179,6 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
     onClose();
   };
 
-  const getModalTitle = () => {
-    if (actionType === 'warning') {
-      return `Send Warning to ${userName}`;
-    }
-    return `Deactivate ${userName}`;
-  };
-
   const getConfirmButtonText = () => {
     if (!selectedReason) return 'Select Action';
     
@@ -191,7 +203,7 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{getModalTitle()}</Text>
+          <Text style={styles.modalTitle}>Deactivate {userName}</Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
             {levels.map((level) => (

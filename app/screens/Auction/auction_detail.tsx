@@ -239,6 +239,17 @@ const AuctionDetailScreen = () => {
     }
   };
 
+  const handleSellerPress = () => {
+    if (!auction) return;
+    
+    router.push({
+      pathname: '../../screens/Profile/PublicProfile',
+      params: {
+        userId: auction.sellerId
+      }
+    });
+  };
+
   const handleBuyNowConfirm = (addressData: any, shippingFee: number, totalAmount: number) => {
     console.log('Purchase request data:', {
       addressData,
@@ -470,7 +481,11 @@ const AuctionDetailScreen = () => {
           </View>
         </View>
 
-        <View style={styles.sellerSection}>
+        <TouchableOpacity 
+          style={styles.sellerSection}
+          onPress={handleSellerPress}
+          activeOpacity={0.7}
+        >
           <Text style={styles.sectionTitle}>👤 Seller Information</Text>
           <View style={styles.sellerBox}>
             <View style={styles.sellerInfo}>
@@ -495,7 +510,7 @@ const AuctionDetailScreen = () => {
               </View>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.locationSection}>
           <Text style={styles.sectionTitle}>📍 Location</Text>

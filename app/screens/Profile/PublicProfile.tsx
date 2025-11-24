@@ -14,8 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../../firebaseConfig';
+import { getFollowCounts } from '../../../services/User/followService';
 import ProductFeed from '../../components/ProductFeed';
-
+import ReportButton from '../../components/Report/ReportButton';
 const { width, height } = Dimensions.get("window");
 
 interface PublicUserData {
@@ -36,9 +37,13 @@ interface PublicUserData {
 const PublicProfile: React.FC = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [selectedTab, setSelectedTab] = useState<'information' | 'products'>('products');
+  const [selectedTab, setSelectedTab] = useState<'information' | 'products'>('information');
   const [userData, setUserData] = useState<PublicUserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [followCounts, setFollowCounts] = useState({
+    followerCount: 0,
+    followingCount: 0
+  });
 
   const userId = params.userId as string;
 
@@ -64,6 +69,14 @@ const PublicProfile: React.FC = () => {
             avatarURL: data.avatarURL,
             address: data.address || {},
           });
+
+          const counts = await getFollowCounts(userId);
+          if (counts.success) {
+            setFollowCounts({
+              followerCount: counts.followerCount,
+              followingCount: counts.followingCount
+            });
+          }
         } else {
           console.error('User not found');
           router.back();
@@ -114,27 +127,65 @@ const PublicProfile: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.container}>
-        <View style={{width: width, flexDirection: "column", justifyContent: "space-between"}}>
+        <View style={styles.headerSection}>
           <ImageBackground 
             source={require('../../assets/images/background_profile.jpg')}
-            style={styles.headerBackground}
+            style={styles.backgroundImage}
           >
-            <TouchableOpacity 
-              style={styles.backButtonContainer}
-              onPress={() => router.back()}
-            >
-              <Image style={styles.backIcon} source={require("../../assets/icons/back2.png")}/>
-            </TouchableOpacity>
-            
-            <View style={styles.avatarContainer}>
-              <Image
-                source={
-                  userData.avatarURL
-                    ? { uri: userData.avatarURL }
-                    : require("../../assets/icons/profile-picture.png")
-                }
-                style={styles.avatar}
-              />
+            <View style={styles.headerTop}>
+              <TouchableOpacity 
+                style={styles.backButtonContainer}
+                onPress={() => router.back()}
+              >
+                <Image style={styles.backIcon} source={require("../../assets/icons/back2.png")}/>
+              </TouchableOpacity>
+              
+              <View style={styles.avatarStatsContainer}>
+                <View style={styles.avatarWrapper}>
+                  <Image
+                    source={
+                      userData.avatarURL
+                        ? { uri: userData.avatarURL }
+                        : require("../../assets/icons/profile-picture.png")
+                    }
+                    style={styles.avatar}
+                  />
+                  <View style={styles.strustPointContainer}>
+                    <Image 
+                      source={require("../../assets/icons/strustpoint.png")} 
+                      style={styles.strustPointIcon}
+                    />
+                    <Text style={styles.strustPointLabel}>Strust Point: 100</Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.reportButtonContainer}>
+                <ReportButton 
+                  reportedUserId={userId}
+                  reportedUserName={userData?.fullName || 'User'}
+                  size={40}
+                />
+                <Text style={styles.reportLabel}>Report</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.followBottomRight}>
+              <View style={styles.followStatItem}>
+                <Image 
+                  style={styles.followerIcon} 
+                  source={require('../../assets/icons/follower.png')} 
+                />
+                <Text style={styles.followStatLabel}>Follower: {followCounts.followerCount}</Text>
+              </View>
+              
+              <View style={styles.followStatItem}>
+                <Image 
+                  style={styles.followingIcon} 
+                  source={require('../../assets/icons/following.png')} 
+                />
+                <Text style={styles.followStatLabel}>Following: {followCounts.followingCount}</Text>
+              </View>
             </View>
           </ImageBackground>
         </View>
@@ -158,101 +209,107 @@ const PublicProfile: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.content}>
-          {selectedTab === 'information' && (
-            <ScrollView 
-              style={styles.infoContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.infoContainer}>
-                <View style={styles.infoCard}>
-                  <Text style={styles.cardTitle}>👤 Basic Information</Text>
-        
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>Full Name:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.fullName)}
-                    </Text>
-                  </View>
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>Email:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.email)}
-                    </Text>
-                  </View>
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoLabel}>Phone:</Text>
-                    <Text style={styles.infoValue}>
-                      {displayValue(userData.phone)}
-                    </Text>
-                  </View>
-                </View>
-
-                {(userData.address?.street || userData.address?.province || userData.address?.district || userData.address?.ward) && (
-                  <View style={styles.addressCard}>
-                    <Text style={styles.cardTitle}>📍 Address Information</Text>
-        
-                    {userData.address.street && (
-                      <View style={styles.infoSection}>
-                        <Text style={styles.infoLabel}>Street:</Text>
-                        <Text style={styles.infoValue}>
-                          {displayValue(userData.address.street)}
-                        </Text>
-                      </View>
-                    )}
-                    {userData.address.ward && (
-                      <View style={styles.infoSection}>
-                        <Text style={styles.infoLabel}>Ward:</Text>
-                        <Text style={styles.infoValue}>
-                          {displayValue(userData.address.ward)}
-                        </Text>
-                      </View>
-                    )}
-                    {userData.address.district && (
-                      <View style={styles.infoSection}>
-                        <Text style={styles.infoLabel}>District:</Text>
-                        <Text style={styles.infoValue}>
-                          {displayValue(userData.address.district)}
-                        </Text>
-                      </View>
-                    )}
-                    {userData.address.province && (
-                      <View style={styles.infoSection}>
-                        <Text style={styles.infoLabel}>Province:</Text>
-                        <Text style={styles.infoValue}>
-                          {displayValue(userData.address.province)}
-                        </Text>
-                      </View>
-                    )}
-                    
-                    <View style={styles.fullAddressSection}>
-                      <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
-                      <Text style={styles.fullAddressText}>
-                        {getCompleteAddress()}
+        <ImageBackground 
+          source={require('../../assets/images/profile_background.jpg')} 
+          style={styles.contentBackground}
+          resizeMode="cover"
+        >
+          <View style={styles.content}>
+            {selectedTab === 'information' && (
+              <ScrollView 
+                style={styles.infoContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.infoContainer}>
+                  <View style={styles.infoCard}>
+                    <Text style={styles.cardTitle}>👤 Basic Information</Text>
+          
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>Full Name:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.fullName)}
+                      </Text>
+                    </View>
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>Email:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.email)}
+                      </Text>
+                    </View>
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoLabel}>Phone:</Text>
+                      <Text style={styles.infoValue}>
+                        {displayValue(userData.phone)}
                       </Text>
                     </View>
                   </View>
-                )}
 
-                {!(userData.address?.street || userData.address?.province) && (
-                  <View style={styles.noDataCard}>
-                    <Text style={styles.noDataText}>📍 No address information added yet</Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-          )}
+                  {(userData.address?.street || userData.address?.province || userData.address?.district || userData.address?.ward) && (
+                    <View style={styles.addressCard}>
+                      <Text style={styles.cardTitle}>📍 Address Information</Text>
           
-          {selectedTab === 'products' && (
-            <View style={styles.productsContent}>
-              <ProductFeed 
-                mode="user"
-                userId={userId}
-                isOwnProfile={false}
-              />
-            </View>
-          )}
-        </View>
+                      {userData.address.street && (
+                        <View style={styles.infoSection}>
+                          <Text style={styles.infoLabel}>Street:</Text>
+                          <Text style={styles.infoValue}>
+                            {displayValue(userData.address.street)}
+                          </Text>
+                        </View>
+                      )}
+                      {userData.address.ward && (
+                        <View style={styles.infoSection}>
+                          <Text style={styles.infoLabel}>Ward:</Text>
+                          <Text style={styles.infoValue}>
+                            {displayValue(userData.address.ward)}
+                          </Text>
+                        </View>
+                      )}
+                      {userData.address.district && (
+                        <View style={styles.infoSection}>
+                          <Text style={styles.infoLabel}>District:</Text>
+                          <Text style={styles.infoValue}>
+                            {displayValue(userData.address.district)}
+                          </Text>
+                        </View>
+                      )}
+                      {userData.address.province && (
+                        <View style={styles.infoSection}>
+                          <Text style={styles.infoLabel}>Province:</Text>
+                          <Text style={styles.infoValue}>
+                            {displayValue(userData.address.province)}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      <View style={styles.fullAddressSection}>
+                        <Text style={styles.fullAddressLabel}>📬 Complete Address:</Text>
+                        <Text style={styles.fullAddressText}>
+                          {getCompleteAddress()}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {!(userData.address?.street || userData.address?.province) && (
+                    <View style={styles.noDataCard}>
+                      <Text style={styles.noDataText}>📍 No address information added yet</Text>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+            
+            {selectedTab === 'products' && (
+              <View style={styles.productsContent}>
+                <ProductFeed 
+                  mode="user"
+                  userId={userId}
+                  isOwnProfile={false}
+                />
+              </View>
+            )}
+          </View>
+        </ImageBackground>
       </View>
     </SafeAreaView>
   );
@@ -270,16 +327,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     padding: 20,
   },
-  headerBackground: {
+  headerSection: {
     width: width,
   },
+  backgroundImage: {
+    width: '100%',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 15,
+    paddingVertical: 20,
+  },
   backButtonContainer: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 10,
-    width: 40,
-    height: 40,
+    width: 30,
+    height: 30,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     justifyContent: 'center',
@@ -290,24 +353,97 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  backIcon: {
-    width:20,
-    height:20,
-    color: '#333',
-    marginRight:2
+  avatarStatsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
   },
-  avatarContainer: {
-    justifyContent: "center", 
-    alignItems: "center", 
-    paddingVertical: 10,
-    paddingTop: 50,
+  avatarWrapper: {
+    marginRight: 15,
+    alignItems: 'center',
   },
   avatar: {
-    width: width * 0.35,
-    height: width * 0.35,
-    borderRadius: 100,
-    borderWidth: 5,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
     borderColor: "#D4A017",
+  },
+  strustPointContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginRight: 25,
+  },
+  strustPointIcon: {
+    width: 15,
+    height: 15,
+    marginRight: 8,
+    tintColor: '#D4A017',
+  },
+  strustPointLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#ffffffff',
+    backgroundColor: '#D4A017',
+    padding:5,
+    borderRadius: 5,
+  },
+  followBottomRight: {
+    position: 'absolute',
+    bottom: 15,
+    right: 15,
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  followStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  followerIcon: {
+    width: 15,
+    height: 15,
+    marginRight: 8,
+    tintColor: '#4CAF50',
+  },
+  followingIcon: {
+    width: 15,
+    height: 15,
+    marginRight: 8,
+    tintColor: '#2196F3',
+  },
+  followStatLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#ffffffff',
+  },
+  reportButtonContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  reportIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#ffffff',
+  },
+  reportLabel: {
+    fontSize: 8,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  backIcon: {
+    width: 20,
+    height: 20,
   },
   backButton: {
     backgroundColor: '#00A86B',
@@ -344,6 +480,10 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#00A86B',
   },
+  contentBackground: {
+    flex: 1,
+    width: '100%',
+  },
   content: {
     flex: 1,
   },
@@ -356,29 +496,15 @@ const styles = StyleSheet.create({
   infoContainer: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 15,
     paddingBottom: 20,
-  },
-  titleContainer: {
-    width: width,
-    flexDirection: "row", 
-    justifyContent: "space-between", 
-    alignItems: "center", 
-    paddingHorizontal: 10, 
-    padding: 5, 
-    borderTopWidth: 5, 
-    borderColor: "white"
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+    paddingTop: 10,
   },
   infoCard: {
-    width: "95%",
-    marginVertical: 10,
+    width: "100%",
+    marginVertical: 8,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#00A86B',
@@ -389,10 +515,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   addressCard: {
-    width: "95%",
-    marginVertical: 10,
+    width: "100%",
+    marginVertical: 8,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#00A86B',
@@ -403,10 +529,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   noDataCard: {
-    width: "95%",
-    marginVertical: 10,
+    width: "100%",
+    marginVertical: 8,
     padding: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(248, 249, 250, 0.95)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#e9ecef',

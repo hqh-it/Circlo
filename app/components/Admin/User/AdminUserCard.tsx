@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { sendSuspensionNotification, sendWarningToUser } from '../../../../services/Admin/AdminNotificationService';
 import { activateUser, banUser, deactivateUser, unbanUser } from '../../../../services/Admin/AdminUserService';
 import SuspensionModal from './SuspensionModal';
 
@@ -60,13 +61,34 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     setUpdating(true);
     try {
       const finalReason = customReason || reason;
-      const result = await deactivateUser(user.id, finalReason, duration);
-      if (result.success) {
-        Alert.alert('Success', result.message);
-        onUserUpdate();
+      
+      if (duration === 0) {
+        const warningResult = await sendWarningToUser(user.id, finalReason);
+        if (!warningResult.success) {
+          Alert.alert('Error', warningResult.error);
+          return;
+        }
       } else {
-        Alert.alert('Error', result.error);
+        const suspendResult = await deactivateUser(user.id, finalReason, duration);
+        if (!suspendResult.success) {
+          Alert.alert('Error', suspendResult.error);
+          return;
+        }
+        
+        const notificationResult = await sendSuspensionNotification(
+          user.id, 
+          finalReason, 
+          duration, 
+          'suspend'
+        );
+        
+        if (!notificationResult.success) {
+          console.warn('Failed to send notification:', notificationResult.error);
+        }
       }
+      
+      Alert.alert('Success', duration === 0 ? 'Warning sent successfully' : 'User deactivated successfully');
+      onUserUpdate();
     } catch (error) {
       Alert.alert('Error', 'Failed to perform action');
     } finally {
@@ -80,6 +102,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     try {
       const result = await activateUser(user.id);
       if (result.success) {
+        await sendSuspensionNotification(user.id, '', 0, 'unsuspend');
         Alert.alert('Success', result.message);
         onUserUpdate();
       } else {
@@ -117,6 +140,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     try {
       const result = await banUser(user.id, "Manual ban by administrator");
       if (result.success) {
+        await sendSuspensionNotification(user.id, "Manual ban by administrator", -1, 'ban');
         Alert.alert('Success', result.message);
         onUserUpdate();
       } else {
@@ -149,6 +173,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
     try {
       const result = await unbanUser(user.id);
       if (result.success) {
+        await sendSuspensionNotification(user.id, '', 0, 'unban');
         Alert.alert('Success', result.message);
         onUserUpdate();
       } else {

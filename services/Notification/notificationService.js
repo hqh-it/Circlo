@@ -424,6 +424,40 @@ export const notificationService = {
     }
   },
 
+  async createReportNotification(reportData) {
+    try {
+      console.log('Creating report notification with data:', reportData);
+      
+      // Create notification for the reporter (user who submitted the report)
+      const userNotification = {
+        type: 'report_submitted',
+        userId: reportData.reporterId,
+        relatedUserId: reportData.reportedUserId,
+        relatedOrderId: '',
+        relatedProductId: '',
+        title: 'Report Submitted Successfully',
+        message: `Your report about ${reportData.reportedUserName} has been received and is under review.`,
+        data: {
+          reportId: reportData.reportId,
+          reportedUserName: reportData.reportedUserName,
+          reason: reportData.reason,
+          level: reportData.level,
+          status: 'submitted',
+          timestamp: serverTimestamp()
+        },
+        isRead: false
+      };
+
+      const result = await this.createNotification(userNotification);
+      console.log('User notification creation result:', result);
+      
+      return true;
+    } catch (error) {
+      console.error('Error creating report notification:', error);
+      return false;
+    }
+  },
+
   async getNotificationsByType(userId, type) {
     try {
       const q = query(
