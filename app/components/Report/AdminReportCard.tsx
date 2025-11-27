@@ -1,4 +1,3 @@
-// components/Admin/Report/AdminReportCard.tsx
 import { ResizeMode, Video } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -10,11 +9,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { sendWarningToUser } from '../../../services/Admin/AdminNotificationService';
 import { deactivateUser } from '../../../services/Admin/AdminUserService';
-import { resolveReport, updateReportStatus } from '../../../services/Report/ReportService';
+import { getRejectionReasons, rejectReport, resolveReport, updateReportStatus } from '../../../services/Report/ReportService';
 import SuspensionModal from '../Admin/User/SuspensionModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,22 +46,48 @@ const AdminReportCard: React.FC<AdminReportCardProps> = ({ report, onReportUpdat
   const [updating, setUpdating] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedRejectReason, setSelectedRejectReason] = useState('');
+  const [customRejectReason, setCustomRejectReason] = useState('');
   const [mediaIndex, setMediaIndex] = useState(0);
   const [videoRef, setVideoRef] = useState<any>(null);
 
+  const rejectionReasons = getRejectionReasons();
+
   const handleRejectReport = () => {
-    Alert.alert(
-      'Reject Report',
-      'Reject this report? This will mark it as invalid.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Reject', 
-          style: 'destructive',
-          onPress: () => handleUpdateStatus('rejected')
-        }
-      ]
-    );
+    setShowRejectModal(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!selectedRejectReason) {
+      Alert.alert('Error', 'Please select a rejection reason');
+      return;
+    }
+
+    if (selectedRejectReason === 'Other' && !customRejectReason.trim()) {
+      Alert.alert('Error', 'Please provide a custom rejection reason');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const finalRejectReason = selectedRejectReason === 'Other' ? customRejectReason : selectedRejectReason;
+      
+      const result = await rejectReport(report.id, selectedRejectReason, customRejectReason);
+      if (result.success) {
+        Alert.alert('Success', 'Report has been rejected');
+        setSelectedRejectReason('');
+        setCustomRejectReason('');
+        setShowRejectModal(false);
+        onReportUpdate();
+      } else {
+        Alert.alert('Error', result.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to reject report');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleResolveReport = () => {
@@ -72,28 +99,53 @@ const AdminReportCard: React.FC<AdminReportCardProps> = ({ report, onReportUpdat
     try {
       const finalReason = customReason || reason;
       
-      const suspendResult = await deactivateUser(
-        report.reportedUserId, 
-        finalReason, 
-        duration
-      );
-      
-      if (!suspendResult.success) {
-        Alert.alert('Error', suspendResult.error);
-        return;
-      }
-      
-      const resolveResult = await resolveReport(
-        report.id, 
-        finalReason, 
-        duration
-      );
-      
-      if (resolveResult.success) {
-        Alert.alert('Success', 'User has been suspended and report resolved');
-        onReportUpdate();
+      if (duration === 0) {
+        const warningResult = await sendWarningToUser(
+          report.reportedUserId, 
+          finalReason
+        );
+        
+        if (!warningResult.success) {
+          Alert.alert('Error', warningResult.error);
+          return;
+        }
+        
+        const resolveResult = await resolveReport(
+          report.id, 
+          finalReason, 
+          duration
+        );
+        
+        if (resolveResult.success) {
+          Alert.alert('Success', 'Warning has been sent and report resolved');
+          onReportUpdate();
+        } else {
+          Alert.alert('Error', resolveResult.error);
+        }
       } else {
-        Alert.alert('Error', resolveResult.error);
+        const suspendResult = await deactivateUser(
+          report.reportedUserId, 
+          finalReason, 
+          duration
+        );
+        
+        if (!suspendResult.success) {
+          Alert.alert('Error', suspendResult.error);
+          return;
+        }
+        
+        const resolveResult = await resolveReport(
+          report.id, 
+          finalReason, 
+          duration
+        );
+        
+        if (resolveResult.success) {
+          Alert.alert('Success', 'User has been suspended and report resolved');
+          onReportUpdate();
+        } else {
+          Alert.alert('Error', resolveResult.error);
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to resolve report');
@@ -349,6 +401,86 @@ const AdminReportCard: React.FC<AdminReportCardProps> = ({ report, onReportUpdat
         preSelectedReason={report.reason}
         preSelectedLevel={report.level}
       />
+
+      <Modal
+        visible={showRejectModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowRejectModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.rejectModalContent}>
+            <Text style={styles.modalTitle}>Reject Report</Text>
+            
+            <Text style={styles.modalSubtitle}>
+              Please select a reason for rejecting this report
+            </Text>
+
+            <ScrollView style={styles.reasonsList}>
+              {rejectionReasons.map((reason, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.reasonItem,
+                    selectedRejectReason === reason && styles.selectedReasonItem
+                  ]}
+                  onPress={() => setSelectedRejectReason(reason)}
+                >
+                  <Text style={[
+                    styles.reasonText,
+                    selectedRejectReason === reason && styles.selectedReasonText
+                  ]}>
+                    {reason}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {selectedRejectReason === 'Other' && (
+              <View style={styles.customReasonContainer}>
+                <Text style={styles.customReasonLabel}>Custom Reason:</Text>
+                <TextInput
+                  style={styles.customReasonInput}
+                  placeholder="Please specify the rejection reason"
+                  value={customRejectReason}
+                  onChangeText={setCustomRejectReason}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            )}
+
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setSelectedRejectReason('');
+                  setCustomRejectReason('');
+                }}
+                disabled={updating}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.modalButton, 
+                  styles.confirmRejectButton,
+                  (!selectedRejectReason || updating || (selectedRejectReason === 'Other' && !customRejectReason.trim())) && styles.disabledButton
+                ]}
+                onPress={handleConfirmReject}
+                disabled={!selectedRejectReason || updating || (selectedRejectReason === 'Other' && !customRejectReason.trim())}
+              >
+                <Text style={styles.confirmButtonText}>
+                  {updating ? 'Rejecting...' : 'Confirm Reject'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showDetailModal}
@@ -689,6 +821,13 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     overflow: 'hidden',
   },
+  rejectModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -700,15 +839,83 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    marginBottom: 10,
+    textAlign: 'center',
+    color: '#333',
   },
-  closeButton: {
-    padding: 4,
-  },
-  closeButtonText: {
-    fontSize: 18,
+  modalSubtitle: {
+    fontSize: 14,
     color: '#666',
-    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  reasonsList: {
+    maxHeight: 200,
+    marginBottom: 15,
+  },
+  reasonItem: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  selectedReasonItem: {
+    borderColor: '#dc3545',
+    backgroundColor: '#fff5f5',
+  },
+  reasonText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  selectedReasonText: {
+    color: '#dc3545',
+    fontWeight: '600',
+  },
+  customReasonContainer: {
+    marginBottom: 15,
+  },
+  customReasonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  customReasonInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  confirmRejectButton: {
+    backgroundColor: '#dc3545',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontWeight: '600',
   },
   modalBody: {
     flex: 1,
@@ -819,6 +1026,14 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: 'bold',
   },
 });
 

@@ -1,7 +1,8 @@
 // screens/Admin/AdminUserList.tsx
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -47,7 +48,6 @@ const AdminUserList: React.FC = () => {
       const usersList: User[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        // Lọc bỏ tài khoản admin
         if (data.role !== 'admin') {
           usersList.push({
             id: doc.id,
@@ -79,6 +79,13 @@ const AdminUserList: React.FC = () => {
     loadUsers();
   }, []);
 
+  // Sử dụng useFocusEffect để refresh khi quay lại màn hình
+  useFocusEffect(
+    useCallback(() => {
+      loadUsers();
+    }, [])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     loadUsers();
@@ -109,7 +116,6 @@ const AdminUserList: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <Header title="User Management" />
       
-      {/* Navigation to Reports */}
       <View style={styles.navigationSection}>
         <TouchableOpacity 
           style={styles.reportButton}
@@ -119,7 +125,6 @@ const AdminUserList: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* User Statistics */}
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{activeUsers.length}</Text>

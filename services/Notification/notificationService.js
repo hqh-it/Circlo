@@ -34,7 +34,6 @@ export const notificationService = {
       
       return notifications;
     } catch (error) {
-      console.error('Error getting user notifications:', error);
       return [];
     }
   },
@@ -50,7 +49,6 @@ export const notificationService = {
       const snapshot = await getDocs(q);
       return snapshot.size;
     } catch (error) {
-      console.error('Error getting unread count:', error);
       return 0;
     }
   },
@@ -66,13 +64,11 @@ export const notificationService = {
       const unsubscribe = onSnapshot(q, (snapshot) => {
         callback(snapshot.size);
       }, (error) => {
-        console.error('Error in unread count subscription:', error);
         callback(0);
       });
 
       return unsubscribe;
     } catch (error) {
-      console.error('Error setting up unread count subscription:', error);
       return () => {};
     }
   },
@@ -95,13 +91,11 @@ export const notificationService = {
         });
         callback(notifications);
       }, (error) => {
-        console.error('Error in notifications subscription:', error);
         callback([]);
       });
 
       return unsubscribe;
     } catch (error) {
-      console.error('Error setting up notifications subscription:', error);
       return () => {};
     }
   },
@@ -113,7 +107,6 @@ export const notificationService = {
       });
       return true;
     } catch (error) {
-      console.error('Error marking notification as read:', error);
       return false;
     }
   },
@@ -136,7 +129,6 @@ export const notificationService = {
       await Promise.all(updatePromises);
       return true;
     } catch (error) {
-      console.error('Error marking all as read:', error);
       return false;
     }
   },
@@ -150,7 +142,6 @@ export const notificationService = {
       });
       return true;
     } catch (error) {
-      console.error('Error creating notification:', error);
       return false;
     }
   },
@@ -160,7 +151,6 @@ export const notificationService = {
       await deleteDoc(doc(db, 'notifications', notificationId));
       return true;
     } catch (error) {
-      console.error('Error deleting notification:', error);
       return false;
     }
   },
@@ -182,7 +172,6 @@ export const notificationService = {
       await Promise.all(deletePromises);
       return true;
     } catch (error) {
-      console.error('Error deleting notifications by order ID:', error);
       return false;
     }
   },
@@ -206,7 +195,6 @@ export const notificationService = {
       
       return notifications;
     } catch (error) {
-      console.error('Error getting notifications by order ID:', error);
       return [];
     }
   },
@@ -240,7 +228,6 @@ export const notificationService = {
       } else if (type === 'auction_won') {
         const existingNotifications = await this.getNotificationsByOrderId(order.id);
         if (existingNotifications.length > 0) {
-          console.log('Notifications already exist for order:', order.id);
           return true;
         }
 
@@ -312,30 +299,6 @@ export const notificationService = {
           title: 'Order Rejected',
           message: `You rejected order for "${order.productSnapshot?.title}"`,
           data: { ...order, status: 'rejected' }
-        });
-      } else if (type === 'order_cancelled') {
-        await this.deleteNotificationsByOrderId(order.id);
-
-        notificationsToCreate.push({
-          type: 'order_cancelled_buyer',
-          userId: order.buyerId,
-          relatedUserId: order.sellerId,
-          relatedOrderId: order.id,
-          relatedProductId: order.productId,
-          title: 'Order Cancelled',
-          message: `You cancelled purchase for "${order.productSnapshot?.title}"`,
-          data: { ...order, status: 'cancelled' }
-        });
-
-        notificationsToCreate.push({
-          type: 'order_cancelled_seller',
-          userId: order.sellerId,
-          relatedUserId: order.buyerId,
-          relatedOrderId: order.id,
-          relatedProductId: order.productId,
-          title: 'Order Cancelled',
-          message: `Buyer cancelled order for "${order.productSnapshot?.title}"`,
-          data: { ...order, status: 'cancelled' }
         });
       } else if (type === 'order_accepted_with_payment') {
         await this.deleteNotificationsByOrderId(order.id);
@@ -416,19 +379,14 @@ export const notificationService = {
       );
       
       await Promise.all(createPromises);
-      console.log('Created notifications for order:', order.id);
       return true;
     } catch (error) {
-      console.error('Error creating order notification:', error);
       return false;
     }
   },
 
   async createReportNotification(reportData) {
     try {
-      console.log('Creating report notification with data:', reportData);
-      
-      // Create notification for the reporter (user who submitted the report)
       const userNotification = {
         type: 'report_submitted',
         userId: reportData.reporterId,
@@ -439,6 +397,7 @@ export const notificationService = {
         message: `Your report about ${reportData.reportedUserName} has been received and is under review.`,
         data: {
           reportId: reportData.reportId,
+          reportedUserId: reportData.reportedUserId,
           reportedUserName: reportData.reportedUserName,
           reason: reportData.reason,
           level: reportData.level,
@@ -449,11 +408,136 @@ export const notificationService = {
       };
 
       const result = await this.createNotification(userNotification);
-      console.log('User notification creation result:', result);
       
       return true;
     } catch (error) {
-      console.error('Error creating report notification:', error);
+      return false;
+    }
+  },
+
+  async getReportNotification(reportId, userId) {
+    try {
+      const q = query(
+        collection(db, 'notifications'),
+        where('userId', '==', userId),
+        where('data.reportId', '==', reportId),
+        where('type', 'in', ['report_submitted', 'report_resolved', 'report_rejected'])
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        return {
+          id: doc.id,
+          ...doc.data()
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  async updateReportNotification(reportId, updateData) {
+    try {
+      const reportDoc = await getDocs(query(collection(db, 'reports'), where('__name__', '==', reportId)));
+      if (reportDoc.empty) return false;
+
+      const reportData = reportDoc.docs[0].data();
+      const reporterId = reportData.reporterId;
+
+      const existingNotification = await this.getReportNotification(reportId, reporterId);
+      
+      if (existingNotification) {
+        const notificationRef = doc(db, 'notifications', existingNotification.id);
+        
+        await updateDoc(notificationRef, {
+          ...updateData,
+          updatedAt: serverTimestamp(),
+          isRead: false
+        });
+        
+        return true;
+      } else {
+        const newNotification = {
+          type: updateData.type,
+          userId: reporterId,
+          relatedUserId: reportData.reportedUserId,
+          relatedOrderId: '',
+          relatedProductId: '',
+          title: updateData.title,
+          message: updateData.message,
+          data: updateData.data,
+          isRead: false,
+          createdAt: serverTimestamp()
+        };
+        
+        await this.createNotification(newNotification);
+        return true;
+      }
+    } catch (error) {
+      return false;
+    }
+  },
+
+  async createReportResolvedNotification(reportId, reason, duration) {
+    try {
+      const reportDoc = await getDocs(query(collection(db, 'reports'), where('__name__', '==', reportId)));
+      if (reportDoc.empty) return false;
+
+      const reportData = reportDoc.docs[0].data();
+      
+      const updateData = {
+        type: 'report_resolved',
+        title: 'Report Resolved',
+        message: `Your report about ${reportData.reportedUserName} has been resolved.`,
+        data: {
+          reportId: reportId,
+          reportedUserId: reportData.reportedUserId,
+          reportedUserName: reportData.reportedUserName,
+          reason: reportData.reason,
+          duration: duration,
+          action: 'suspension',
+          status: 'resolved',
+          timestamp: serverTimestamp()
+        }
+      };
+
+      await this.updateReportNotification(reportId, updateData);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  async createReportRejectedNotification(reportId, rejectReason, customRejectReason) {
+    try {
+      const reportDoc = await getDocs(query(collection(db, 'reports'), where('__name__', '==', reportId)));
+      if (reportDoc.empty) return false;
+
+      const reportData = reportDoc.docs[0].data();
+      
+      const updateData = {
+        type: 'report_rejected',
+        title: 'Report Rejected',
+        message: `Your report about ${reportData.reportedUserName} has been rejected.`,
+        data: {
+          reportId: reportId,
+          reportedUserId: reportData.reportedUserId,
+          reportedUserName: reportData.reportedUserName,
+          reason: reportData.reason,
+          rejectReason: rejectReason,
+          customRejectReason: customRejectReason,
+          status: 'rejected',
+          timestamp: serverTimestamp()
+        }
+      };
+
+      await this.updateReportNotification(reportId, updateData);
+      return true;
+    } catch (error) {
       return false;
     }
   },
@@ -479,7 +563,6 @@ export const notificationService = {
       
       return notifications;
     } catch (error) {
-      console.error('Error getting notifications by type:', error);
       return [];
     }
   },
@@ -508,7 +591,6 @@ export const notificationService = {
       
       return notifications;
     } catch (error) {
-      console.error('Error getting recent notifications:', error);
       return [];
     }
   }

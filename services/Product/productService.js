@@ -74,7 +74,7 @@ import { uploadToCloudinary, uploadVideoToCloudinary } from '../cloudinaryServic
         sellerAvatar: userData?.avatarURL || null,
         
         // Product status and metrics
-        status: 'active',
+        status: 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         viewCount: 0,
@@ -296,37 +296,6 @@ export const deleteProduct = async (productId) => {
   }
 };
 
-// Toggle product like
-export const toggleProductLike = async (productId, userId) => {
-  try {
-    const docRef = doc(db, 'products', productId);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      const currentLikes = docSnap.data().likeCount || 0;
-      await updateDoc(docRef, {
-        likeCount: currentLikes + 1
-      });
-      return {
-        success: true,
-        liked: true,
-        newLikeCount: currentLikes + 1
-      };
-    }
-    
-    return {
-      success: false,
-      error: 'Product not found'
-    };
-    
-  } catch (error) {
-    console.error('Error toggling product like:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
 
 // Search products
 export const searchProducts = async (searchTerm, filters = {}) => {
@@ -356,8 +325,6 @@ export const searchProducts = async (searchTerm, filters = {}) => {
   }
 };
 
-// FORMAT PRICE 
-// FORMAT PRICE 
 export const formatPrice = (price) => {
   if (!price && price !== 0) return '0 VND';
   

@@ -383,7 +383,7 @@ const AddProduct = ({
     );
 
     if (result.success) {
-      Alert.alert('Success', 'Product has been listed successfully!');
+      Alert.alert('Success','Product has been submitted for review! It will be visible after admin approval.');
       setTitle('');
       setDescription('');
       setPrice('');

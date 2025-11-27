@@ -1,13 +1,13 @@
 // screens/Admin/AdminReportList.tsx
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../../firebaseConfig';
@@ -31,28 +31,19 @@ interface Report {
 }
 
 const AdminReportList: React.FC = () => {
-  const [reports, setReports] = useState<Report[]>([]);
+  const [allReports, setAllReports] = useState<Report[]>([]);
+  const [filteredReports, setFilteredReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'reviewed' | 'resolved'>('all');
+  const [filter, setFilter] = useState<'pending' | 'resolved' | 'rejected'>('pending');
 
   const loadReports = async () => {
     try {
       setLoading(true);
-      let reportsQuery;
-      
-      if (filter === 'all') {
-        reportsQuery = query(
-          collection(db, "reports"), 
-          orderBy("createdAt", "desc")
-        );
-      } else {
-        reportsQuery = query(
-          collection(db, "reports"),
-          where("status", "==", filter),
-          orderBy("createdAt", "desc")
-        );
-      }
+      const reportsQuery = query(
+        collection(db, "reports"), 
+        orderBy("createdAt", "desc")
+      );
       
       const querySnapshot = await getDocs(reportsQuery);
       
@@ -76,7 +67,8 @@ const AdminReportList: React.FC = () => {
         });
       });
       
-      setReports(reportsList);
+      setAllReports(reportsList);
+      applyFilter(reportsList, filter);
     } catch (error) {
       console.error("Load reports error:", error);
       alert('Failed to load reports');
@@ -86,9 +78,18 @@ const AdminReportList: React.FC = () => {
     }
   };
 
+  const applyFilter = (reports: Report[], currentFilter: string) => {
+    const filtered = reports.filter(report => report.status === currentFilter);
+    setFilteredReports(filtered);
+  };
+
   useEffect(() => {
     loadReports();
-  }, [filter]);
+  }, []);
+
+  useEffect(() => {
+    applyFilter(allReports, filter);
+  }, [filter, allReports]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -100,7 +101,56 @@ const AdminReportList: React.FC = () => {
   };
 
   const getStatusCount = (status: string) => {
-    return reports.filter(report => report.status === status).length;
+    return allReports.filter(report => report.status === status).length;
+  };
+
+  const handleFilterChange = (newFilter: 'pending' | 'resolved' | 'rejected') => {
+    setFilter(newFilter);
+  };
+
+  const getTabStyle = (tabFilter: string) => {
+    if (filter !== tabFilter) return styles.filterTab;
+    
+    switch (tabFilter) {
+      case 'pending':
+        return [styles.filterTab, styles.pendingTabActive];
+      case 'resolved':
+        return [styles.filterTab, styles.resolvedTabActive];
+      case 'rejected':
+        return [styles.filterTab, styles.rejectedTabActive];
+      default:
+        return styles.filterTab;
+    }
+  };
+
+  const getTabTextStyle = (tabFilter: string) => {
+    if (filter !== tabFilter) return styles.filterText;
+    
+    switch (tabFilter) {
+      case 'pending':
+        return [styles.filterText, styles.pendingTextActive];
+      case 'resolved':
+        return [styles.filterText, styles.resolvedTextActive];
+      case 'rejected':
+        return [styles.filterText, styles.rejectedTextActive];
+      default:
+        return styles.filterText;
+    }
+  };
+
+  const getBorderColor = (tabFilter: string) => {
+    if (filter !== tabFilter) return 'transparent';
+    
+    switch (tabFilter) {
+      case 'pending':
+        return '#FFA500';
+      case 'resolved':
+        return '#00A86B';
+      case 'rejected':
+        return '#dc3545';
+      default:
+        return 'transparent';
+    }
   };
 
   if (loading) {
@@ -118,51 +168,45 @@ const AdminReportList: React.FC = () => {
       
       <View style={styles.counter}>
         <Text style={styles.counterText}>
-          Total Reports: {reports.length}
+          Total Reports: {allReports.length}
         </Text>
         <Text style={styles.counterSubText}>
-          {getStatusCount('pending')} pending, {getStatusCount('reviewed')} reviewed, {getStatusCount('resolved')} resolved
+          {getStatusCount('pending')} pending, {getStatusCount('resolved')} resolved, {getStatusCount('rejected')} rejected
         </Text>
       </View>
 
-      {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <TouchableOpacity 
-          style={[styles.filterTab, filter === 'all' && styles.activeFilterTab]}
-          onPress={() => setFilter('all')}
+          style={getTabStyle('pending')}
+          onPress={() => handleFilterChange('pending')}
         >
-          <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterTab, filter === 'pending' && styles.activeFilterTab]}
-          onPress={() => setFilter('pending')}
-        >
-          <Text style={[styles.filterText, filter === 'pending' && styles.activeFilterText]}>
+          <Text style={getTabTextStyle('pending')}>
             Pending ({getStatusCount('pending')})
           </Text>
+          <View style={[styles.tabIndicator, { borderBottomColor: getBorderColor('pending') }]} />
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.filterTab, filter === 'reviewed' && styles.activeFilterTab]}
-          onPress={() => setFilter('reviewed')}
+          style={getTabStyle('resolved')}
+          onPress={() => handleFilterChange('resolved')}
         >
-          <Text style={[styles.filterText, filter === 'reviewed' && styles.activeFilterText]}>
-            Reviewed ({getStatusCount('reviewed')})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterTab, filter === 'resolved' && styles.activeFilterTab]}
-          onPress={() => setFilter('resolved')}
-        >
-          <Text style={[styles.filterText, filter === 'resolved' && styles.activeFilterText]}>
+          <Text style={getTabTextStyle('resolved')}>
             Resolved ({getStatusCount('resolved')})
           </Text>
+          <View style={[styles.tabIndicator, { borderBottomColor: getBorderColor('resolved') }]} />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={getTabStyle('rejected')}
+          onPress={() => handleFilterChange('rejected')}
+        >
+          <Text style={getTabTextStyle('rejected')}>
+            Rejected ({getStatusCount('rejected')})
+          </Text>
+          <View style={[styles.tabIndicator, { borderBottomColor: getBorderColor('rejected') }]} />
         </TouchableOpacity>
       </View>
 
       <FlatList
-        data={reports}
+        data={filteredReports}
         renderItem={({ item }) => (
           <AdminReportCard 
             report={item} 
@@ -177,10 +221,7 @@ const AdminReportList: React.FC = () => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
-              {filter === 'all' 
-                ? 'No reports found' 
-                : `No ${filter} reports found`
-              }
+              No {filter} reports found
             </Text>
           </View>
         }
@@ -230,22 +271,45 @@ const styles = StyleSheet.create({
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 12,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    borderRadius: 8,
+    marginHorizontal: 4,
+    backgroundColor: '#f8f9fa',
   },
-  activeFilterTab: {
-    borderBottomColor: '#00A86B',
+  pendingTabActive: {
+    backgroundColor: '#fffaf0',
+  },
+  resolvedTabActive: {
+    backgroundColor: '#f0fff4',
+  },
+  rejectedTabActive: {
+    backgroundColor: '#fff5f5',
   },
   filterText: {
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
   },
-  activeFilterText: {
+  pendingTextActive: {
+    color: '#FFA500',
+    fontWeight: 'bold',
+  },
+  resolvedTextActive: {
     color: '#00A86B',
     fontWeight: 'bold',
+  },
+  rejectedTextActive: {
+    color: '#dc3545',
+    fontWeight: 'bold',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
   listContent: {
     padding: 16,

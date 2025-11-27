@@ -78,9 +78,32 @@ interface ReportData {
 
 interface ReportConfirmationData {
   reportId: string;
+  reportedUserId: string;
   reportedUserName: string;
   reason: string;
   level: string;
+  status: string;
+  timestamp: any;
+}
+
+interface ReportResolvedData {
+  reportId: string;
+  reportedUserId: string;
+  reportedUserName: string;
+  reason: string;
+  duration: number;
+  action: string;
+  status: string;
+  timestamp: any;
+}
+
+interface ReportRejectedData {
+  reportId: string;
+  reportedUserId: string;
+  reportedUserName: string;
+  reason: string;
+  rejectReason: string;
+  customRejectReason: string;
   status: string;
   timestamp: any;
 }
@@ -100,7 +123,7 @@ interface Notification {
   relatedProductId: string;
   title: string;
   message: string;
-  data: Order | ReportData | ReportConfirmationData | AdminWarningData;
+  data: Order | ReportData | ReportConfirmationData | ReportResolvedData | ReportRejectedData | AdminWarningData;
   isRead: boolean;
   createdAt: any;
   isAdminNotification?: boolean;
@@ -128,6 +151,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const [actionLoading, setActionLoading] = React.useState(false);
   const [otherUserData, setOtherUserData] = useState<UserData | null>(null);
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
+  const [reportedUserData, setReportedUserData] = useState<UserData | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
@@ -145,29 +169,44 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const isAdminAction = notification.type === 'admin_action';
   const isReportNotification = notification.type === 'new_report' || notification.isAdminNotification;
   const isReportConfirmation = notification.type === 'report_submitted';
+  const isReportResolved = notification.type === 'report_resolved';
+  const isReportRejected = notification.type === 'report_rejected';
 
   useEffect(() => {
     const loadUserDataForNotification = async () => {
       const orderData = notification.data as Order;
-      if (!orderData || isReportNotification || isReportConfirmation || isAdminWarning || isAdminAction) return;
-
-      let otherUserId = '';
       
-      if (isSellerNotification) {
-        otherUserId = orderData.buyerId;
-      } else if (isBuyerNotification) {
-        otherUserId = orderData.sellerId;
+      if (orderData && !isReportNotification && !isReportConfirmation && !isAdminWarning && !isAdminAction && !isReportResolved && !isReportRejected) {
+        let otherUserId = '';
+        
+        if (isSellerNotification) {
+          otherUserId = orderData.buyerId;
+        } else if (isBuyerNotification) {
+          otherUserId = orderData.sellerId;
+        }
+        
+        if (otherUserId) {
+          setLoadingUser(true);
+          try {
+            const userData = await loadUserData({ uid: otherUserId });
+            setOtherUserData(userData);
+          } catch (error) {
+          } finally {
+            setLoadingUser(false);
+          }
+        }
       }
-      
-      if (otherUserId) {
-        setLoadingUser(true);
-        try {
-          const userData = await loadUserData({ uid: otherUserId });
-          setOtherUserData(userData);
-        } catch (error) {
-          console.error('Error loading user data:', error);
-        } finally {
-          setLoadingUser(false);
+    };
+
+    const loadReportedUserData = async () => {
+      if (isReportConfirmation || isReportResolved || isReportRejected) {
+        const reportData = notification.data as ReportConfirmationData | ReportResolvedData | ReportRejectedData;
+        if (reportData.reportedUserId) {
+          try {
+            const userData = await loadUserData({ uid: reportData.reportedUserId });
+            setReportedUserData(userData);
+          } catch (error) {
+          }
         }
       }
     };
@@ -179,13 +218,13 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         const userData = await loadUserData({ uid: user.uid });
         setCurrentUserData(userData);
       } catch (error) {
-        console.error('Error loading current user data:', error);
       }
     };
 
     loadUserDataForNotification();
+    loadReportedUserData();
     loadCurrentUserData();
-  }, [notification.data, isSellerNotification, isBuyerNotification, user, isReportNotification, isReportConfirmation, isAdminWarning, isAdminAction]);
+  }, [notification.data, isSellerNotification, isBuyerNotification, user, isReportNotification, isReportConfirmation, isAdminWarning, isAdminAction, isReportResolved, isReportRejected]);
 
   const markAsRead = async () => {
     if (!notification.isRead) {
@@ -193,7 +232,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         await notificationService.markAsRead(notification.id);
         onNotificationUpdate?.();
       } catch (error) {
-        console.warn('Notification might have been deleted:', error);
         onNotificationUpdate?.();
       }
     }
@@ -221,7 +259,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         Alert.alert('Error', result.error || 'Action failed');
       }
     } catch (error) {
-      console.error('Error performing action:', error);
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setActionLoading(false);
@@ -251,7 +288,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         Alert.alert('Error', result.error || 'Action failed');
       }
     } catch (error) {
-      console.error('Error accepting order with payment:', error);
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setActionLoading(false);
@@ -275,7 +311,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         Alert.alert('Error', result.error || 'Action failed');
       }
     } catch (error) {
-      console.error('Error confirming receipt:', error);
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setActionLoading(false);
@@ -313,7 +348,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
                 Alert.alert('Error', result.error || 'Cancel failed');
               }
             } catch (error) {
-              console.error('Error cancelling order:', error);
               Alert.alert('Error', 'Something went wrong');
             } finally {
               setActionLoading(false);
@@ -438,6 +472,25 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     );
   };
 
+  const renderReportedUserInfo = () => {
+    const reportData = notification.data as ReportConfirmationData | ReportResolvedData | ReportRejectedData;
+    
+    return (
+      <View style={styles.reportedUserInfo}>
+        <Image 
+          source={{ uri: reportedUserData?.avatarURL || 'https://via.placeholder.com/40' }} 
+          style={styles.reportedUserAvatar}
+        />
+        <View style={styles.reportedUserText}>
+          <Text style={styles.reportedUserLabel}>Reported User</Text>
+          <Text style={styles.reportedUserName}>
+            {reportedUserData?.fullName || reportData.reportedUserName}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   const renderReportContent = () => {
     const reportData = notification.data as ReportData;
     
@@ -484,14 +537,11 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     const reportData = notification.data as ReportConfirmationData;
     
     return (
-      <View style={styles.reportConfirmationDetails}>
-        <View style={styles.reportField}>
-          <Text style={styles.reportLabel}>Reported User:</Text>
-          <Text style={styles.reportValue}>{reportData.reportedUserName}</Text>
-        </View>
+      <View style={styles.reportDetails}>
+        {renderReportedUserInfo()}
         
         <View style={styles.reportField}>
-          <Text style={styles.reportLabel}>Reason:</Text>
+          <Text style={styles.reportLabel}>Report Reason:</Text>
           <Text style={styles.reportValue}>{reportData.reason}</Text>
         </View>
 
@@ -508,11 +558,75 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     );
   };
 
+  const renderReportResolvedContent = () => {
+    const reportData = notification.data as ReportResolvedData;
+    
+    return (
+      <View style={styles.reportDetails}>
+        {renderReportedUserInfo()}
+        
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Report Reason:</Text>
+          <Text style={styles.reportValue}>{reportData.reason}</Text>
+        </View>
+
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Action Taken:</Text>
+          <Text style={styles.reportValue}>User Suspension</Text>
+        </View>
+
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Duration:</Text>
+          <Text style={styles.reportValue}>
+            {reportData.duration === -1 ? 'Permanent' : `${reportData.duration} days`}
+          </Text>
+        </View>
+        
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Status:</Text>
+          <Text style={[styles.reportValue, styles.resolvedStatus]}>Resolved</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderReportRejectedContent = () => {
+    const reportData = notification.data as ReportRejectedData;
+    
+    return (
+      <View style={styles.reportDetails}>
+        {renderReportedUserInfo()}
+        
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Report Reason:</Text>
+          <Text style={styles.reportValue}>{reportData.reason}</Text>
+        </View>
+
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Rejection Reason:</Text>
+          <Text style={styles.reportValue}>{reportData.rejectReason}</Text>
+        </View>
+
+        {reportData.customRejectReason && (
+          <View style={styles.reportField}>
+            <Text style={styles.reportLabel}>Details:</Text>
+            <Text style={styles.reportValue}>{reportData.customRejectReason}</Text>
+          </View>
+        )}
+        
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Status:</Text>
+          <Text style={[styles.reportValue, styles.rejectedStatus]}>Rejected</Text>
+        </View>
+      </View>
+    );
+  };
+
   const renderAdminWarningContent = () => {
     const adminData = notification.data as AdminWarningData;
     
     return (
-      <View style={styles.adminWarningDetails}>
+      <View style={styles.reportDetails}>
         <View style={styles.reportField}>
           <Text style={styles.reportLabel}>Action Type:</Text>
           <Text style={styles.reportValue}>Warning</Text>
@@ -532,7 +646,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   };
 
   const renderUserInfo = () => {
-    if (loadingUser) {
+    if (loadingUser && !isReportConfirmation && !isReportResolved && !isReportRejected) {
       return (
         <View style={styles.userInfo}>
           <ActivityIndicator size="small" color="#00A86B" />
@@ -561,7 +675,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     if (isReportConfirmation) {
       return (
         <View style={styles.userInfo}>
-          <View style={styles.confirmedBadge}>
+          <View style={styles.adminAvatar}>
             <Image 
               source={require('../assets/images/logo.png')}
               style={styles.adminLogo}
@@ -575,10 +689,44 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
+    if (isReportResolved) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.adminAvatar}>
+            <Image 
+              source={require('../assets/images/logo.png')}
+              style={styles.adminLogo}
+            />
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>Report Resolved</Text>
+            <Text style={styles.userName}>Circlo Admin</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (isReportRejected) {
+      return (
+        <View style={styles.userInfo}>
+          <View style={styles.adminAvatar}>
+            <Image 
+              source={require('../assets/images/logo.png')}
+              style={styles.adminLogo}
+            />
+          </View>
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>Report Rejected</Text>
+            <Text style={styles.userName}>Circlo Admin</Text>
+          </View>
+        </View>
+      );
+    }
+
     if (isAdminWarning || isAdminAction) {
       return (
         <View style={styles.userInfo}>
-          <View style={styles.confirmedBadge}>
+          <View style={styles.adminAvatar}>
             <Image 
               source={require('../assets/images/logo.png')}
               style={styles.adminLogo}
@@ -682,148 +830,152 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
                              (orderData?.status === 'accepted' || orderData?.status === 'waiting_payment');
 
     return (
-      <TouchableOpacity 
-        style={[
-          styles.container,
-          !notification.isRead && styles.unreadContainer,
-          (isSellerActionable || isBuyerActionable) && styles.actionableContainer,
-          isAuctionWon && styles.auctionContainer,
-          (isReceiptConfirmedBuyer || isReceiptConfirmedSeller || isOrderCompleted) && styles.completedContainer,
-          (isAdminWarning || isAdminAction) && styles.adminWarningContainer,
-          isReportNotification && styles.reportContainer,
-          isReportConfirmation && styles.reportConfirmationContainer
-        ]}
-        onPress={markAsRead}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            {renderUserInfo()}
-            
-            <View style={styles.productSection}>
-              {orderData?.productSnapshot?.images?.[0] && !isAdminWarning && !isAdminAction && !isReportNotification && !isReportConfirmation && (
-                <Image 
-                  source={{ uri: orderData.productSnapshot.images[0] }} 
-                  style={styles.productImage}
-                />
-              )}
-              <View style={styles.productInfo}>
-                <Text style={styles.title}>{notification.title}</Text>
-                <Text style={styles.message}>{notification.message}</Text>
-                {!isAdminWarning && !isAdminAction && !isReportNotification && !isReportConfirmation && (
-                  <View style={styles.productDetails}>
-                    <Text style={styles.productName} numberOfLines={2}>
-                      {orderData?.productSnapshot?.title || ''}
-                    </Text>
-                    <Text style={styles.productPrice}>
-                      {formatPrice(orderData?.productSnapshot?.price || 0)}
-                      {isAuctionWon && <Text style={styles.auctionPrice}> (Winning Bid)</Text>}
-                    </Text>
-                  </View>
+      <View style={styles.cardContainer}>
+        {!notification.isRead && <View style={styles.unreadIndicator} />}
+        
+        <TouchableOpacity 
+          style={[
+            styles.container,
+            (isSellerActionable || isBuyerActionable) && styles.actionableContainer,
+            isAuctionWon && styles.auctionContainer,
+            (isReceiptConfirmedBuyer || isReceiptConfirmedSeller || isOrderCompleted) && styles.completedContainer,
+            (isAdminWarning || isAdminAction) && styles.adminWarningContainer,
+            isReportConfirmation && styles.reportConfirmationContainer,
+            isReportResolved && styles.reportResolvedContainer,
+            isReportRejected && styles.reportRejectedContainer
+          ]}
+          onPress={markAsRead}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              {renderUserInfo()}
+              
+              <View style={styles.productSection}>
+                {orderData?.productSnapshot?.images?.[0] && !isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+                  <Image 
+                    source={{ uri: orderData.productSnapshot.images[0] }} 
+                    style={styles.productImage}
+                  />
                 )}
+                <View style={styles.productInfo}>
+                  <Text style={styles.title}>{notification.title}</Text>
+                  <Text style={styles.message}>{notification.message}</Text>
+                  {!isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+                    <View style={styles.productDetails}>
+                      <Text style={styles.productName} numberOfLines={2}>
+                        {orderData?.productSnapshot?.title || ''}
+                      </Text>
+                      <Text style={styles.productPrice}>
+                        {formatPrice(orderData?.productSnapshot?.price || 0)}
+                        {isAuctionWon && <Text style={styles.auctionPrice}> (Winning Bid)</Text>}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
 
-            {isReportNotification && renderReportContent()}
-            {isReportConfirmation && renderReportConfirmationContent()}
-            {(isAdminWarning || isAdminAction) && renderAdminWarningContent()}
+              {isReportNotification && renderReportContent()}
+              {isReportConfirmation && renderReportConfirmationContent()}
+              {isReportResolved && renderReportResolvedContent()}
+              {isReportRejected && renderReportRejectedContent()}
+              {(isAdminWarning || isAdminAction) && renderAdminWarningContent()}
+            </View>
           </View>
           
-          {!notification.isRead && <View style={styles.unreadDot} />}
-        </View>
-        
-        {orderData && !isAdminWarning && !isAdminAction && !isReportNotification && !isReportConfirmation && (
-          <View style={styles.orderInfo}>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Status:</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(orderData.status) }]}>
-                <Text style={styles.statusText}>
-                  {orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}
-                </Text>
+          {orderData && !isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+            <View style={styles.orderInfo}>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Status:</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(orderData.status) }]}>
+                  <Text style={styles.statusText}>
+                    {orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}
+                  </Text>
+                </View>
               </View>
+
+              {renderPaymentInfo()}
+
+              {isSellerActionable && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.acceptButton]}
+                    onPress={() => handleSellerAction('accept')}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.actionButtonText}>Accept</Text>
+                    )}
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.rejectButton]}
+                    onPress={() => handleSellerAction('reject')}
+                    disabled={actionLoading}
+                  >
+                    <Text style={styles.actionButtonText}>Reject</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {isBuyerActionable && canConfirmReceipt && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={handleBuyerCancel}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.actionButtonText}>Cancel Order</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.confirmButton]}
+                    onPress={handleConfirmReceipt}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.actionButtonText}>Confirm Receipt</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <Text style={styles.date}>
+                {formatDate(notification.createdAt)}
+              </Text>
             </View>
+          )}
 
-            {renderPaymentInfo()}
+          {(isAdminWarning || isAdminAction || isReportConfirmation || isReportResolved || isReportRejected) && (
+            <View style={styles.orderInfo}>
+              <Text style={styles.date}>
+                {formatDate(notification.createdAt)}
+              </Text>
+            </View>
+          )}
 
-            {isSellerActionable && (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.acceptButton]}
-                  onPress={() => handleSellerAction('accept')}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>Accept</Text>
-                  )}
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => handleSellerAction('reject')}
-                  disabled={actionLoading}
-                >
-                  <Text style={styles.actionButtonText}>Reject</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {isBuyerActionable && canConfirmReceipt && (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.cancelButton]}
-                  onPress={handleBuyerCancel}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>Cancel Order</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.confirmButton]}
-                  onPress={handleConfirmReceipt}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>Confirm Receipt</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <Text style={styles.date}>
-              {formatDate(notification.createdAt)}
-            </Text>
-          </View>
-        )}
-
-        {(isAdminWarning || isAdminAction || isReportNotification || isReportConfirmation) && (
-          <View style={styles.orderInfo}>
-            <Text style={styles.date}>
-              {formatDate(notification.createdAt)}
-            </Text>
-          </View>
-        )}
-
-        {showAcceptModal && !isAdminWarning && !isAdminAction && !isReportNotification && !isReportConfirmation && (
-          <AcceptOrderModal
-            visible={showAcceptModal}
-            onClose={() => setShowAcceptModal(false)}
-            onAccept={handleAcceptWithPayment}
-            order={orderData}
-            bankAccounts={currentUserData?.bankAccounts || []}
-            loading={actionLoading}
-          />
-        )}
-      </TouchableOpacity>
+          {showAcceptModal && !isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+            <AcceptOrderModal
+              visible={showAcceptModal}
+              onClose={() => setShowAcceptModal(false)}
+              onAccept={handleAcceptWithPayment}
+              order={orderData}
+              bankAccounts={currentUserData?.bankAccounts || []}
+              loading={actionLoading}
+            />
+          )}
+        </TouchableOpacity>
+      </View>
     );
   };
 
-  if (isReportConfirmation || isAdminWarning || isAdminAction || isBuyerNotification || isSellerNotification || isAuctionNotification || isReportNotification) {
+  if (isReportConfirmation || isReportResolved || isReportRejected || isAdminWarning || isAdminAction || isBuyerNotification || isSellerNotification || isAuctionNotification || isReportNotification) {
     return renderNotificationContent();
   }
 
@@ -831,11 +983,24 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  cardContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  unreadIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00A86B',
+    zIndex: 10,
+  },
   container: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -844,33 +1009,29 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#e0e0e0',
   },
-  unreadContainer: {
-    borderLeftColor: '#00A86B',
-    backgroundColor: '#f8fffc',
-  },
   actionableContainer: {
     borderLeftColor: '#FFA500',
-    backgroundColor: '#fffaf0',
   },
   auctionContainer: {
     borderLeftColor: '#FFD700',
-    backgroundColor: '#fffdf0',
   },
   completedContainer: {
     borderLeftColor: '#00A86B',
-    backgroundColor: '#f0fff4',
   },
   adminWarningContainer: {
     borderLeftColor: '#af4c4cff',
-    backgroundColor: '#f8eae9ff',
-  },
-  reportContainer: {
-    borderLeftColor: '#2E8B57',
-    backgroundColor: '#f0fff8',
   },
   reportConfirmationContainer: {
+    backgroundColor: 'white',
     borderLeftColor: '#4CAF50',
-    backgroundColor: '#f1f8e9',
+  },
+  reportResolvedContainer: {
+    backgroundColor: '#f0fff4',
+    borderLeftColor: '#00A86B',
+  },
+  reportRejectedContainer: {
+    backgroundColor: '#fff5f5',
+    borderLeftColor: '#dc3545',
   },
   header: {
     flexDirection: 'row',
@@ -899,7 +1060,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     marginRight: 10,
-    backgroundColor: '#2E8B57',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -935,15 +1095,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  adminBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FF6B35',
-    marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   crownIcon: {
     fontSize: 16,
   },
@@ -951,9 +1102,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   completedIcon: {
-    fontSize: 16,
-  },
-  adminIcon: {
     fontSize: 16,
   },
   userText: {
@@ -965,6 +1113,33 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   userName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  reportedUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+  },
+  reportedUserAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
+  },
+  reportedUserText: {
+    flex: 1,
+  },
+  reportedUserLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  reportedUserName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
@@ -1015,13 +1190,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FF6B35',
     fontStyle: 'italic',
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#00A86B',
-    marginLeft: 8,
   },
   orderInfo: {
     borderTopWidth: 1,
@@ -1141,18 +1309,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 8,
   },
-  reportConfirmationDetails: {
-    backgroundColor: '#e8f5e8',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  adminWarningDetails: {
-    backgroundColor: '#fef9f9ff',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
   reportField: {
     flexDirection: 'row',
     marginBottom: 6,
@@ -1160,8 +1316,8 @@ const styles = StyleSheet.create({
   reportLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#2E8B57',
-    width: 80,
+    color: '#666',
+    width: 100,
   },
   reportValue: {
     fontSize: 13,
@@ -1170,6 +1326,14 @@ const styles = StyleSheet.create({
   },
   confirmationStatus: {
     color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  resolvedStatus: {
+    color: '#00A86B',
+    fontWeight: 'bold',
+  },
+  rejectedStatus: {
+    color: '#dc3545',
     fontWeight: 'bold',
   },
   warningStatus: {

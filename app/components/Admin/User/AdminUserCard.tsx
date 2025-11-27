@@ -1,3 +1,4 @@
+// components/Admin/User/AdminUserCard.tsx
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -88,7 +89,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       }
       
       Alert.alert('Success', duration === 0 ? 'Warning sent successfully' : 'User deactivated successfully');
-      onUserUpdate();
+      onUserUpdate(); // This should trigger refresh in AdminUserList
     } catch (error) {
       Alert.alert('Error', 'Failed to perform action');
     } finally {
@@ -104,7 +105,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       if (result.success) {
         await sendSuspensionNotification(user.id, '', 0, 'unsuspend');
         Alert.alert('Success', result.message);
-        onUserUpdate();
+        onUserUpdate(); // Refresh the list
       } else {
         Alert.alert('Error', result.error);
       }
@@ -142,7 +143,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       if (result.success) {
         await sendSuspensionNotification(user.id, "Manual ban by administrator", -1, 'ban');
         Alert.alert('Success', result.message);
-        onUserUpdate();
+        onUserUpdate(); // Refresh the list
       } else {
         Alert.alert('Error', result.error);
       }
@@ -175,7 +176,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       if (result.success) {
         await sendSuspensionNotification(user.id, '', 0, 'unban');
         Alert.alert('Success', result.message);
-        onUserUpdate();
+        onUserUpdate(); // Refresh the list
       } else {
         Alert.alert('Error', result.error);
       }
