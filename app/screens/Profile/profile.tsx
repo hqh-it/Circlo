@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import React from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../services/Auth/AuthContext";
 import Header from "../../components/header_for_detail";
@@ -82,6 +82,26 @@ export default function Profile(){
                                     Auction
                                 </Text>
                             </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.subTabButton, 
+                                    productSubTab === "Pending" && styles.activeProductSubTab
+                                ]} 
+                                onPress={() => setProductSubTab("Pending")}
+                            >
+                                <View style={styles.pendingTab}>
+                                    <Image 
+                                        source={require('../../assets/icons/pending.png')} 
+                                        style={styles.pendingIcon}
+                                    />
+                                    <Text style={[
+                                        styles.subTabText,
+                                        productSubTab === "Pending" && styles.activeSubTabText
+                                    ]}>
+                                        Your Pending Product
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
                         </View>
                         
                         <View style={styles.feedContainer}>
@@ -92,6 +112,7 @@ export default function Profile(){
                                     userId={user?.uid} 
                                     isOwnProfile={true}
                                     productType="normal"
+                                    status="active"
                                 />
                             )}
                             {productSubTab === "Auction" && (
@@ -101,6 +122,17 @@ export default function Profile(){
                                     userId={user?.uid} 
                                     isOwnProfile={true}
                                     productType="auction" 
+                                    status="active"
+                                />
+                            )}
+                            {productSubTab === "Pending" && (
+                                <ProductFeed 
+                                    key={`pending-${refreshKey}`}
+                                    mode="user" 
+                                    userId={user?.uid} 
+                                    isOwnProfile={true}
+                                    productType="all"
+                                    status="pending"
                                 />
                             )}
                         </View>
@@ -198,7 +230,7 @@ const styles = StyleSheet.create({
     },
     ProductsubTabBar: {
         flexDirection: 'row',
-        height: 40,
+        height: 50,
         backgroundColor: '#f5f5f5',
         borderBottomWidth:2,
         borderTopWidth: 2,
@@ -218,7 +250,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 10,
+        paddingHorizontal: 5,
     },
     activeProductSubTab: {
         borderBottomWidth: 2,
@@ -231,12 +263,23 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f8e1ff',
     },
     subTabText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
+        textAlign: 'center',
     },
     activeSubTabText: {
         fontWeight: 'bold',
         color: '#000000ff',
+    },
+    pendingTab: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pendingIcon: {
+        width: 16,
+        height: 16,
+        marginRight: 4,
     },
     feedContainer: {
         flex: 1,

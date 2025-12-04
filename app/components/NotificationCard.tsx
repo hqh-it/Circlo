@@ -114,6 +114,14 @@ interface AdminWarningData {
   timestamp: any;
 }
 
+interface AdminProductActionData {
+  actionType: string;
+  productTitle: string;
+  reason: string;
+  timestamp: any;
+  productImages?: string[];
+}
+
 interface Notification {
   id: string;
   type: string;
@@ -123,7 +131,7 @@ interface Notification {
   relatedProductId: string;
   title: string;
   message: string;
-  data: Order | ReportData | ReportConfirmationData | ReportResolvedData | ReportRejectedData | AdminWarningData;
+  data: Order | ReportData | ReportConfirmationData | ReportResolvedData | ReportRejectedData | AdminWarningData | AdminProductActionData;
   isRead: boolean;
   createdAt: any;
   isAdminNotification?: boolean;
@@ -167,6 +175,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const isOrderCompleted = notification.type === 'order_completed_buyer' || notification.type === 'order_completed_seller';
   const isAdminWarning = notification.type === 'admin_warning';
   const isAdminAction = notification.type === 'admin_action';
+  const isAdminProductAction = notification.type === 'admin_product_action';
   const isReportNotification = notification.type === 'new_report' || notification.isAdminNotification;
   const isReportConfirmation = notification.type === 'report_submitted';
   const isReportResolved = notification.type === 'report_resolved';
@@ -176,7 +185,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     const loadUserDataForNotification = async () => {
       const orderData = notification.data as Order;
       
-      if (orderData && !isReportNotification && !isReportConfirmation && !isAdminWarning && !isAdminAction && !isReportResolved && !isReportRejected) {
+      if (orderData && !isReportNotification && !isReportConfirmation && !isAdminWarning && !isAdminAction && !isAdminProductAction && !isReportResolved && !isReportRejected) {
         let otherUserId = '';
         
         if (isSellerNotification) {
@@ -191,6 +200,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             const userData = await loadUserData({ uid: otherUserId });
             setOtherUserData(userData);
           } catch (error) {
+            console.error('Error loading user data:', error);
           } finally {
             setLoadingUser(false);
           }
@@ -206,6 +216,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             const userData = await loadUserData({ uid: reportData.reportedUserId });
             setReportedUserData(userData);
           } catch (error) {
+            console.error('Error loading reported user data:', error);
           }
         }
       }
@@ -218,13 +229,14 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         const userData = await loadUserData({ uid: user.uid });
         setCurrentUserData(userData);
       } catch (error) {
+        console.error('Error loading current user data:', error);
       }
     };
 
     loadUserDataForNotification();
     loadReportedUserData();
     loadCurrentUserData();
-  }, [notification.data, isSellerNotification, isBuyerNotification, user, isReportNotification, isReportConfirmation, isAdminWarning, isAdminAction, isReportResolved, isReportRejected]);
+  }, [notification.data, isSellerNotification, isBuyerNotification, user, isReportNotification, isReportConfirmation, isAdminWarning, isAdminAction, isAdminProductAction, isReportResolved, isReportRejected]);
 
   const markAsRead = async () => {
     if (!notification.isRead) {
@@ -232,6 +244,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         await notificationService.markAsRead(notification.id);
         onNotificationUpdate?.();
       } catch (error) {
+        console.error('Error marking as read:', error);
         onNotificationUpdate?.();
       }
     }
@@ -645,8 +658,53 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     );
   };
 
+  const renderAdminProductActionContent = () => {
+    const adminData = notification.data as AdminProductActionData;
+    const productImages = adminData.productImages || [];
+    const productImage = productImages[0];
+    
+    return (
+      <View style={styles.reportDetails}>
+        <View style={styles.productSection}>
+          {productImage && (
+            <Image 
+              source={{ uri: productImage }} 
+              style={styles.productImage}
+            />
+          )}
+          <View style={styles.productInfo}>
+            <View style={styles.productDetails}>
+              <Text style={styles.productName} numberOfLines={2}>
+                {adminData.productTitle || ''}
+              </Text>
+            </View>
+          </View>
+        </View>
+        
+        {adminData.reason && (
+          <View style={styles.reportField}>
+            <Text style={styles.reportLabel}>Reason:</Text>
+            <Text style={styles.reportValue}>{adminData.reason}</Text>
+          </View>
+        )}
+        
+        <View style={styles.reportField}>
+          <Text style={styles.reportLabel}>Status:</Text>
+          <Text style={[styles.reportValue, 
+            adminData.actionType === 'approved' ? styles.approvedStatus : 
+            adminData.actionType === 'rejected' ? styles.rejectedStatus :
+            adminData.actionType === 'deleted' ? styles.deletedStatus :
+            styles.warningStatus
+          ]}>
+            {adminData.actionType?.charAt(0).toUpperCase() + adminData.actionType?.slice(1) || 'Unknown'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   const renderUserInfo = () => {
-    if (loadingUser && !isReportConfirmation && !isReportResolved && !isReportRejected) {
+    if (loadingUser && !isReportConfirmation && !isReportResolved && !isReportRejected && !isAdminProductAction) {
       return (
         <View style={styles.userInfo}>
           <ActivityIndicator size="small" color="#00A86B" />
@@ -655,75 +713,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
-    if (isReportNotification) {
-      return (
-        <View style={styles.userInfo}>
-          <View style={styles.adminAvatar}>
-            <Image 
-              source={require('../assets/images/logo.png')}
-              style={styles.adminLogo}
-            />
-          </View>
-          <View style={styles.userText}>
-            <Text style={styles.userRole}>System Report</Text>
-            <Text style={styles.userName}>Administrator</Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (isReportConfirmation) {
-      return (
-        <View style={styles.userInfo}>
-          <View style={styles.adminAvatar}>
-            <Image 
-              source={require('../assets/images/logo.png')}
-              style={styles.adminLogo}
-            />
-          </View>
-          <View style={styles.userText}>
-            <Text style={styles.userRole}>Report Confirmation</Text>
-            <Text style={styles.userName}>Circlo Admin</Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (isReportResolved) {
-      return (
-        <View style={styles.userInfo}>
-          <View style={styles.adminAvatar}>
-            <Image 
-              source={require('../assets/images/logo.png')}
-              style={styles.adminLogo}
-            />
-          </View>
-          <View style={styles.userText}>
-            <Text style={styles.userRole}>Report Resolved</Text>
-            <Text style={styles.userName}>Circlo Admin</Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (isReportRejected) {
-      return (
-        <View style={styles.userInfo}>
-          <View style={styles.adminAvatar}>
-            <Image 
-              source={require('../assets/images/logo.png')}
-              style={styles.adminLogo}
-            />
-          </View>
-          <View style={styles.userText}>
-            <Text style={styles.userRole}>Report Rejected</Text>
-            <Text style={styles.userName}>Circlo Admin</Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (isAdminWarning || isAdminAction) {
+    if (isReportNotification || isReportConfirmation || isReportResolved || isReportRejected || isAdminWarning || isAdminAction || isAdminProductAction) {
       return (
         <View style={styles.userInfo}>
           <View style={styles.adminAvatar}>
@@ -735,27 +725,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           <View style={styles.userText}>
             <Text style={styles.userRole}>System Notification</Text>
             <Text style={styles.userName}>Circlo Admin</Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (otherUserData && !isAuctionNotification && !isReceiptConfirmedBuyer && !isReceiptConfirmedSeller && !isOrderCompleted) {
-      const userRole = isSellerNotification ? 'Buyer' : 'Seller';
-      const orderData = notification.data as Order;
-      const userId = isSellerNotification ? orderData?.buyerId : orderData?.sellerId;
-      
-      return (
-        <View style={styles.userInfo}>
-          <Image 
-            source={{ uri: otherUserData.avatarURL || 'https://via.placeholder.com/40' }} 
-            style={styles.userAvatar}
-          />
-          <View style={styles.userText}>
-            <Text style={styles.userRole}>From {userRole}</Text>
-            <Text style={styles.userName}>
-              {otherUserData.fullName || `User ${userId?.slice(-8) || ''}`}
-            </Text>
           </View>
         </View>
       );
@@ -817,6 +786,27 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       );
     }
 
+    if (otherUserData && !isAuctionNotification && !isReceiptConfirmedBuyer && !isReceiptConfirmedSeller && !isOrderCompleted) {
+      const userRole = isSellerNotification ? 'Buyer' : 'Seller';
+      const orderData = notification.data as Order;
+      const userId = isSellerNotification ? orderData?.buyerId : orderData?.sellerId;
+      
+      return (
+        <View style={styles.userInfo}>
+          <Image 
+            source={{ uri: otherUserData.avatarURL || 'https://via.placeholder.com/40' }} 
+            style={styles.userAvatar}
+          />
+          <View style={styles.userText}>
+            <Text style={styles.userRole}>From {userRole}</Text>
+            <Text style={styles.userName}>
+              {otherUserData.fullName || `User ${userId?.slice(-8) || ''}`}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
     return null;
   };
 
@@ -840,6 +830,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             isAuctionWon && styles.auctionContainer,
             (isReceiptConfirmedBuyer || isReceiptConfirmedSeller || isOrderCompleted) && styles.completedContainer,
             (isAdminWarning || isAdminAction) && styles.adminWarningContainer,
+            isAdminProductAction && styles.adminProductActionContainer,
             isReportConfirmation && styles.reportConfirmationContainer,
             isReportResolved && styles.reportResolvedContainer,
             isReportRejected && styles.reportRejectedContainer
@@ -851,7 +842,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               {renderUserInfo()}
               
               <View style={styles.productSection}>
-                {orderData?.productSnapshot?.images?.[0] && !isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+                {orderData?.productSnapshot?.images?.[0] && !isAdminWarning && !isAdminAction && !isAdminProductAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
                   <Image 
                     source={{ uri: orderData.productSnapshot.images[0] }} 
                     style={styles.productImage}
@@ -860,7 +851,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
                 <View style={styles.productInfo}>
                   <Text style={styles.title}>{notification.title}</Text>
                   <Text style={styles.message}>{notification.message}</Text>
-                  {!isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+                  {!isAdminWarning && !isAdminAction && !isAdminProductAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
                     <View style={styles.productDetails}>
                       <Text style={styles.productName} numberOfLines={2}>
                         {orderData?.productSnapshot?.title || ''}
@@ -879,10 +870,11 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               {isReportResolved && renderReportResolvedContent()}
               {isReportRejected && renderReportRejectedContent()}
               {(isAdminWarning || isAdminAction) && renderAdminWarningContent()}
+              {isAdminProductAction && renderAdminProductActionContent()}
             </View>
           </View>
           
-          {orderData && !isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+          {orderData && !isAdminWarning && !isAdminAction && !isAdminProductAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
             <View style={styles.orderInfo}>
               <View style={styles.statusRow}>
                 <Text style={styles.statusLabel}>Status:</Text>
@@ -952,7 +944,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             </View>
           )}
 
-          {(isAdminWarning || isAdminAction || isReportConfirmation || isReportResolved || isReportRejected) && (
+          {(isAdminWarning || isAdminAction || isAdminProductAction || isReportConfirmation || isReportResolved || isReportRejected) && (
             <View style={styles.orderInfo}>
               <Text style={styles.date}>
                 {formatDate(notification.createdAt)}
@@ -960,7 +952,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             </View>
           )}
 
-          {showAcceptModal && !isAdminWarning && !isAdminAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
+          {showAcceptModal && !isAdminWarning && !isAdminAction && !isAdminProductAction && !isReportConfirmation && !isReportResolved && !isReportRejected && (
             <AcceptOrderModal
               visible={showAcceptModal}
               onClose={() => setShowAcceptModal(false)}
@@ -975,7 +967,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     );
   };
 
-  if (isReportConfirmation || isReportResolved || isReportRejected || isAdminWarning || isAdminAction || isBuyerNotification || isSellerNotification || isAuctionNotification || isReportNotification) {
+  if (isReportConfirmation || isReportResolved || isReportRejected || isAdminWarning || isAdminAction || isAdminProductAction || isBuyerNotification || isSellerNotification || isAuctionNotification || isReportNotification) {
     return renderNotificationContent();
   }
 
@@ -1020,6 +1012,10 @@ const styles = StyleSheet.create({
   },
   adminWarningContainer: {
     borderLeftColor: '#af4c4cff',
+  },
+  adminProductActionContainer: {
+    borderLeftColor: '#2196F3',
+    backgroundColor: '#f0f8ff',
   },
   reportConfirmationContainer: {
     backgroundColor: 'white',
@@ -1334,6 +1330,14 @@ const styles = StyleSheet.create({
   },
   rejectedStatus: {
     color: '#dc3545',
+    fontWeight: 'bold',
+  },
+  approvedStatus: {
+    color: '#00A86B',
+    fontWeight: 'bold',
+  },
+  deletedStatus: {
+    color: '#ff4444',
     fontWeight: 'bold',
   },
   warningStatus: {

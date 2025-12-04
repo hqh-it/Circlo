@@ -34,6 +34,7 @@ interface Product {
   condition?: string;
   createdAt?: any;
   sellerId: string;
+  status?: string;
   auctionInfo?: {
     currentBid: number;
     startPrice: number;
@@ -57,6 +58,7 @@ interface ProductFeedProps {
   isExternalData?: boolean;
   searchTerm?: string;
   filters?: any;
+  status?: 'active' | 'pending';
 }
 
 const PAGE_SIZE = 10;
@@ -71,6 +73,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
   isExternalData = false,
   searchTerm,
   filters,
+  status = 'active',
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +93,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
     if (!isExternalData) {
       loadProducts();
     }
-  }, [productType, mode, userId, searchTerm, filters]);
+  }, [productType, mode, userId, searchTerm, filters, status]);
 
   const loadAuctionProducts = useCallback(async (isLoadMore = false) => {
     try {
@@ -124,6 +127,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
             condition: auction.condition || 'used',
             createdAt: auction.createdAt,
             sellerId: auction.sellerId,
+            status: auction.status,
             auctionInfo: {
               currentBid: auction.currentBid || auction.startPrice || 0,
               startPrice: auction.startPrice || 0,
@@ -137,8 +141,12 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
             }
           };
         });
+
+        const filteredProducts = auctionProducts.filter(product => 
+          status === 'pending' ? product.status === 'pending' : product.status === 'active'
+        );
         
-        return auctionProducts;
+        return filteredProducts;
       } else {
         return [];
       }
@@ -146,7 +154,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       console.error('Error loading auction products:', error);
       return [];
     }
-  }, [mode, userId, searchTerm, filters]);
+  }, [mode, userId, searchTerm, filters, status]);
 
   const loadNormalProducts = useCallback(async (isLoadMore = false) => {
     try {
@@ -159,10 +167,16 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         }
         
         if (result.success) {
-          return result.products.map(product => ({
+          const productsWithType = result.products.map(product => ({
             ...product,
             type: 'normal' as const
           }));
+
+          const filteredProducts = productsWithType.filter(product => 
+            status === 'pending' ? product.status === 'pending' : product.status === 'active'
+          );
+
+          return filteredProducts;
         }
         return [];
       }
@@ -174,7 +188,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         const baseQuery = query(
           productsRef,
           where('sellerId', '==', userId),
-          where('status', '==', 'active'),
+          where('status', '==', status),
           orderBy('createdAt', 'desc')
         );
 
@@ -184,7 +198,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       } else {
         const baseQuery = query(
           productsRef,
-          where('status', '==', 'active'),
+          where('status', '==', status),
           orderBy('createdAt', 'desc')
         );
         
@@ -216,7 +230,7 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       console.error('Error loading normal products:', error);
       throw error;
     }
-  }, [mode, userId, lastVisible, searchTerm, filters]);
+  }, [mode, userId, lastVisible, searchTerm, filters, status]);
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     if (isExternalData) {

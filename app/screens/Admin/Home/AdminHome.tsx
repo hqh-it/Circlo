@@ -26,11 +26,11 @@ export default function AdminHome() {
   };
 
   const handleManageProducts = () => {
-    alert("Product management feature coming soon!");
+    router.push("/screens/Admin/Product/AdminProductFeed");
   };
 
   const handleManageAuctions = () => {
-    alert("Auction management feature coming soon!");
+    router.push("/screens/Admin/Auction/AdminAuctionFeed");
   };
 
   const handleViewReports = () => {

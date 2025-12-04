@@ -1,4 +1,3 @@
-// NotificationScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -47,7 +46,27 @@ const NotificationScreen = () => {
     
     try {
       const notificationsData = await notificationService.getUserNotifications(user.uid);
-      setNotifications(notificationsData);
+      
+      // Lọc và sắp xếp thông báo - mới nhất lên đầu
+      const sortedNotifications = notificationsData
+        .filter(notification => 
+          // Bao gồm tất cả các loại thông báo: order, auction, admin actions, reports
+          notification.type.includes('order') ||
+          notification.type.includes('auction') ||
+          notification.type.includes('admin_') ||
+          notification.type.includes('report') ||
+          notification.type === 'admin_product_action' ||
+          notification.type === 'admin_warning' ||
+          notification.type === 'admin_action'
+        )
+        .sort((a, b) => {
+          // Sắp xếp theo thời gian - mới nhất lên đầu
+          const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
+          const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
+          return timeB - timeA;
+        });
+      
+      setNotifications(sortedNotifications);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -115,6 +134,7 @@ const NotificationScreen = () => {
               tintColor={'#00A86B'}
             />
           }
+          showsVerticalScrollIndicator={false}
         />
       )}
     </SafeAreaView>
@@ -128,6 +148,7 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
+    paddingBottom: 20,
   },
   centerContainer: {
     flex: 1,
@@ -155,6 +176,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    lineHeight: 20,
   },
 });
 
