@@ -3,9 +3,11 @@ import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -14,6 +16,7 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
+import { uploadChatImage } from '../cloudinaryService';
 import {
   ChannelType,
   MessageStatus,
@@ -21,7 +24,6 @@ import {
 } from './chatTypes';
 
 export const chatService = {
-
   createOrGetChannel: async (createData) => {
     try {
       const channelsRef = collection(db, 'channels');
@@ -54,7 +56,6 @@ export const chatService = {
         if (existingChannel.hiddenForUsers && 
             existingChannel.hiddenForUsers.includes(createData.participants[0])) {
           
-          console.log('🔄 Auto-restoring hidden channel for user:', createData.participants[0]);
           const channelRef = doc(db, 'channels', existingChannel.id);
           await updateDoc(channelRef, {
             hiddenForUsers: arrayRemove(createData.participants[0])
@@ -83,7 +84,7 @@ export const chatService = {
         lastMessageAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        hiddenForUsers: [] 
+        hiddenForUsers: []
       });
 
       return {
@@ -140,13 +141,162 @@ export const chatService = {
     }
   },
 
+  editMessage: async (messageId, newContent) => {
+    try {
+      const messageRef = doc(db, 'messages', messageId);
+      await updateDoc(messageRef, {
+        content: newContent,
+        edited: true,
+        editedAt: serverTimestamp()
+      });
+
+      const messageDoc = await getDoc(messageRef);
+      const messageData = messageDoc.data();
+      
+      if (messageData) {
+        const channelRef = doc(db, 'channels', messageData.channelId);
+        await updateDoc(channelRef, {
+          lastMessage: newContent,
+          lastMessageAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      return {
+        success: true
+      };
+
+    } catch (error) {
+      console.error('Error editing message:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  deleteMessage: async (messageId) => {
+    try {
+      const messageRef = doc(db, 'messages', messageId);
+      const messageDoc = await getDoc(messageRef);
+      
+      if (!messageDoc.exists()) {
+        return {
+          success: false,
+          error: 'Message not found'
+        };
+      }
+
+      const messageData = messageDoc.data();
+      
+      await deleteDoc(messageRef);
+
+      if (messageData) {
+        const channelRef = doc(db, 'channels', messageData.channelId);
+        
+        const messagesRef = collection(db, 'messages');
+        const q = query(
+          messagesRef,
+          where('channelId', '==', messageData.channelId),
+          orderBy('timestamp', 'desc'),
+          limit(1)
+        );
+        
+        const snapshot = await getDocs(q);
+        let lastMessage = '';
+        
+        if (!snapshot.empty) {
+          const lastMessageData = snapshot.docs[0].data();
+          lastMessage = lastMessageData.type === MessageType.IMAGE 
+            ? (lastMessageData.caption || '📷 Sent an image') 
+            : lastMessageData.content;
+        }
+
+        await updateDoc(channelRef, {
+          lastMessage: lastMessage,
+          lastMessageAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      return {
+        success: true
+      };
+
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  sendImageMessage: async (channelId, senderId, imageUrl, caption = '') => {
+    try {
+      const messageRef = await addDoc(collection(db, 'messages'), {
+        channelId: channelId,
+        senderId: senderId,
+        imageUrl: imageUrl,
+        caption: caption,
+        type: MessageType.IMAGE,
+        timestamp: serverTimestamp(),
+        readBy: [senderId],
+        status: MessageStatus.SENT
+      });
+
+      const channelRef = doc(db, 'channels', channelId);
+      await updateDoc(channelRef, {
+        lastMessage: caption || '📷 Sent an image',
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      return {
+        success: true,
+        messageId: messageRef.id
+      };
+
+    } catch (error) {
+      console.error('Error sending image message:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  uploadImage: async (imageUri, channelId) => {
+    try {
+      const uploadResult = await uploadChatImage(imageUri, channelId);
+      
+      if (uploadResult.success && uploadResult.url) {
+        return {
+          success: true,
+          url: uploadResult.url
+        };
+      } else {
+        return {
+          success: false,
+          error: uploadResult.error || 'Upload failed'
+        };
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
   sendSystemMessage: async (channelId, content) => {
     try {
       const messageRef = await addDoc(collection(db, 'messages'), {
         channelId: channelId,
         senderId: 'system',
         content: content,
-        type: 'system',
+        type: MessageType.SYSTEM,
         timestamp: serverTimestamp(),
         readBy: [],
         status: MessageStatus.SENT
@@ -464,5 +614,4 @@ export const chatService = {
       return { success: false, error: error.message };
     }
   }
-  
 };

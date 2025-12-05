@@ -1,3 +1,4 @@
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -8,7 +9,9 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -19,12 +22,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { chatService } from '../../../services/Chat/chatService';
-import { ChatMessage } from '../../../services/Chat/chatTypes';
+import { ChatMessage, MessageType } from '../../../services/Chat/chatTypes';
 import { getProductById, getTimeAgo } from '../../../services/Product/productService';
 import { loadUserData } from '../../../services/User/userService';
 import ProductHeader from '../../components/ProductHeader';
 
-const { height } = Dimensions.get('window');
+const { height, width } = Dimensions.get('window');
 
 interface User {
   uid: string;
@@ -41,6 +44,12 @@ interface ProductInfo {
   sellerId: string;
 }
 
+interface SelectedImage {
+  uri: string;
+  name?: string;
+  type?: string;
+}
+
 const ChatScreen = () => {
   const { user: currentUser } = useAuth();
   const router = useRouter();
@@ -51,12 +60,20 @@ const ChatScreen = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [currentUserData, setCurrentUserData] = useState<User | null>(null);
   const [productData, setProductData] = useState<ProductInfo | null>(null);
   const [loadingOtherUser, setLoadingOtherUser] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string>('');
+  const [actionMenuVisible, setActionMenuVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] = useState({ x: 0, y: 0 });
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   
   const flatListRef = useRef<FlatList>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -66,8 +83,7 @@ const ChatScreen = () => {
     StatusBar.setBarStyle('light-content');
     StatusBar.setBackgroundColor('#01332fff');
 
-    return () => {
-    };
+    return () => {};
   }, []);
 
   useEffect(() => {
@@ -98,9 +114,7 @@ const ChatScreen = () => {
     
     try {
       await chatService.markMessagesAsRead(channelId, currentUser.uid);
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-    }
+    } catch (error) {}
   };
 
   const handleBackPress = () => {
@@ -150,9 +164,7 @@ const ChatScreen = () => {
             }
           }
         }
-      } catch (error) {
-        console.error('Error loading product data:', error);
-      }
+      } catch (error) {}
     };
 
     loadProductData();
@@ -211,19 +223,15 @@ const ChatScreen = () => {
               const exitResult = await chatService.exitChat(channelId, currentUser.uid);
               
               if (exitResult.success) {
-                console.log('✅ Exit successful, sending system message...');
                 await chatService.sendSystemMessage(
                   channelId,
                   `${currentUserData?.fullName || 'User'} has left the chat`
                 );
-                console.log('✅ System message sent, navigating back...');
                 router.back();
               } else {
-                console.log('❌ Exit failed:', exitResult.error);
                 Alert.alert('Error', 'Failed to exit chat');
               }
             } catch (error) {
-              console.log('❌ Exit error:', error);
               Alert.alert('Error', 'Failed to exit chat');
             }
           }
@@ -260,7 +268,6 @@ const ChatScreen = () => {
         }
       }
     } catch (error) {
-      console.error('Error loading other user:', error);
     } finally {
       setLoadingOtherUser(false);
     }
@@ -280,9 +287,7 @@ const ChatScreen = () => {
             email: userData.email || currentUser.email || ''
           });
         }
-      } catch (error) {
-        console.error('Error loading current user data:', error);
-      }
+      } catch (error) {}
     };
 
     loadCurrentUser();
@@ -342,31 +347,200 @@ const ChatScreen = () => {
   }, [channelId, currentUser, loadingOtherUser]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !currentUser || !channelId || sending) return;
+    if ((!newMessage.trim() && selectedImages.length === 0) || !currentUser || !channelId || sending) return;
 
     setSending(true);
+    
     try {
-      const result = await chatService.sendTextMessage(
-        channelId, 
-        currentUser.uid, 
-        newMessage.trim()
-      );
-      
-      if (result.success) {
-        setNewMessage('');
-        setTimeout(() => {
-          if (flatListRef.current) {
-            flatListRef.current.scrollToEnd({ animated: true });
+      if (editingMessage) {
+        setUploadingImages(true);
+        const result = await chatService.editMessage(editingMessage.id, newMessage.trim());
+        
+        if (result.success) {
+          setNewMessage('');
+          setEditingMessage(null);
+          setTimeout(() => {
+            if (flatListRef.current) {
+              flatListRef.current.scrollToEnd({ animated: true });
+            }
+          }, 100);
+        } else {
+          Alert.alert('Error', result.error || 'Failed to edit message');
+        }
+        setUploadingImages(false);
+      }
+      else if (selectedImages.length > 0) {
+        setUploadingImages(true);
+        const uploadPromises = selectedImages.map(image => 
+          chatService.uploadImage(image.uri, channelId)
+        );
+
+        const uploadResults = await Promise.all(uploadPromises);
+        const successfulUploads = uploadResults.filter(result => result.success);
+        
+        if (successfulUploads.length > 0) {
+          const sendPromises = successfulUploads.map(result => 
+            chatService.sendImageMessage(
+              channelId,
+              currentUser.uid,
+              result.url!,
+              newMessage.trim()
+            )
+          );
+
+          const sendResults = await Promise.all(sendPromises);
+          const successfulSends = sendResults.filter(result => result.success);
+          
+          if (successfulSends.length > 0) {
+            setNewMessage('');
+            setSelectedImages([]);
+            setTimeout(() => {
+              if (flatListRef.current) {
+                flatListRef.current.scrollToEnd({ animated: true });
+              }
+            }, 100);
+          } else {
+            Alert.alert('Error', 'Failed to send some images');
           }
-        }, 100);
-      } else {
-        Alert.alert('Error', 'Failed to send message');
+        } else {
+          Alert.alert('Upload Failed', 'Failed to upload images');
+        }
+        setUploadingImages(false);
+      }
+      else {
+        const result = await chatService.sendTextMessage(
+          channelId, 
+          currentUser.uid, 
+          newMessage.trim()
+        );
+        
+        if (result.success) {
+          setNewMessage('');
+          setTimeout(() => {
+            if (flatListRef.current) {
+              flatListRef.current.scrollToEnd({ animated: true });
+            }
+          }, 100);
+        } else {
+          Alert.alert('Error', 'Failed to send message');
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setSending(false);
     }
+  };
+
+  const pickImages = async () => {
+    if (!currentUser || !channelId) return;
+
+    try {
+      const maxSelection = 3;
+      const availableSlots = maxSelection - selectedImages.length;
+      
+      if (availableSlots <= 0) {
+        Alert.alert('Limit reached', `You can only select up to ${maxSelection} images at a time`);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: availableSlots,
+        quality: 0.8,
+        aspect: [4, 3],
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const newSelectedImages = result.assets.slice(0, availableSlots).map(asset => ({
+          uri: asset.uri,
+          name: `image_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`,
+          type: 'image/jpeg'
+        }));
+        
+        setSelectedImages(prev => [...prev, ...newSelectedImages]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to select images');
+    }
+  };
+
+  const removeSelectedImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const openImageViewer = (imageUrl: string) => {
+    setViewingImage(imageUrl);
+    setImageViewerVisible(true);
+  };
+
+  const closeImageViewer = () => {
+    setImageViewerVisible(false);
+    setViewingImage('');
+  };
+
+  const showActionMenu = (message: ChatMessage, event: any) => {
+    const { pageX, pageY } = event.nativeEvent;
+    setSelectedMessage(message);
+    setActionMenuPosition({ x: pageX, y: pageY });
+    setActionMenuVisible(true);
+  };
+
+  const hideActionMenu = () => {
+    setActionMenuVisible(false);
+    setSelectedMessage(null);
+  };
+
+  const handleEditMessage = () => {
+    if (!selectedMessage) return;
+    
+    if (selectedMessage.type === MessageType.TEXT) {
+      setNewMessage(selectedMessage.content);
+      setEditingMessage(selectedMessage);
+      textInputRef.current?.focus();
+    }
+    hideActionMenu();
+  };
+
+  const handleDeleteMessage = () => {
+    if (!selectedMessage) return;
+    
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: hideActionMenu
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await chatService.deleteMessage(selectedMessage.id);
+              
+              if (result.success) {
+                Alert.alert('Success', 'Message deleted successfully');
+              } else {
+                Alert.alert('Error', result.error || 'Failed to delete message');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete message');
+            } finally {
+              hideActionMenu();
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setNewMessage('');
   };
 
   const formatMessageTime = (timestamp: any) => {
@@ -382,6 +556,7 @@ const ChatScreen = () => {
   const renderMessage = ({ item, index }: { item: ChatMessage; index: number }) => {
     const isMyMessage = item.senderId === currentUser?.uid;
     const isSystemMessage = item.type === 'system';
+    const isImageMessage = item.type === 'image';
     
     if (isSystemMessage) {
       return (
@@ -401,11 +576,122 @@ const ChatScreen = () => {
       new Date(messages[index + 1]?.timestamp?.toDate?.() || 0).getTime() - 
       new Date(item.timestamp?.toDate?.() || 0).getTime() > 300000;
 
+    if (isImageMessage) {
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          delayLongPress={500}
+          onLongPress={(e) => showActionMenu(item, e)}
+          style={[
+            styles.messageContainer,
+            isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
+          ]}
+        >
+          {!isMyMessage && (
+            <View style={styles.otherMessageWrapper}>
+              {showAvatar && (
+                <Image 
+                  source={
+                    otherUser?.avatarURL 
+                      ? { uri: otherUser.avatarURL }
+                      : require('../../assets/icons/profile-picture.png')
+                  } 
+                  style={styles.avatar} 
+                />
+              )}
+              {!showAvatar && <View style={styles.avatarSpacer} />}
+              
+              <View style={styles.otherMessageContent}>
+                {showAvatar && (
+                  <Text style={styles.senderName}>
+                    {otherUser?.fullName || 'User'}
+                  </Text>
+                )}
+                <TouchableOpacity 
+                  style={styles.imageBubble}
+                  onPress={() => openImageViewer(item.imageUrl)}
+                  activeOpacity={0.7}
+                  delayLongPress={500}
+                  onLongPress={(e) => {
+                    e.stopPropagation();
+                    showActionMenu(item, e);
+                  }}
+                >
+                  <Image 
+                    source={{ uri: item.imageUrl }} 
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                  {item.caption && (
+                    <Text style={styles.imageCaption}>{item.caption}</Text>
+                  )}
+                </TouchableOpacity>
+                {showTime && (
+                  <Text style={styles.otherMessageTime}>
+                    {formatMessageTime(item.timestamp)}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+          
+          {isMyMessage && (
+            <View style={styles.myMessageWrapper}>
+              <View style={styles.myMessageContent}>
+                <TouchableOpacity 
+                  style={[styles.imageBubble, styles.myImageBubble]}
+                  onPress={() => openImageViewer(item.imageUrl)}
+                  activeOpacity={0.7}
+                  delayLongPress={500}
+                  onLongPress={(e) => {
+                    e.stopPropagation();
+                    showActionMenu(item, e);
+                  }}
+                >
+                  <Image 
+                    source={{ uri: item.imageUrl }} 
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                  {item.caption && (
+                    <Text style={[styles.imageCaption, styles.myImageCaption]}>
+                      {item.caption}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                {showTime && (
+                  <Text style={styles.myMessageTime}>
+                    {formatMessageTime(item.timestamp)}
+                  </Text>
+                )}
+              </View>
+              {showAvatar && (
+                <Image 
+                  source={
+                    currentUserData?.avatarURL 
+                      ? { uri: currentUserData.avatarURL }
+                      : require('../../assets/icons/profile-picture.png')
+                  } 
+                  style={styles.avatar} 
+                />
+              )}
+              {!showAvatar && <View style={styles.avatarSpacer} />}
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
     return (
-      <View style={[
-        styles.messageContainer,
-        isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
-      ]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        delayLongPress={500}
+        onLongPress={(e) => showActionMenu(item, e)}
+        style={[
+          styles.messageContainer,
+          isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
+        ]}
+      >
         {!isMyMessage && (
           <View style={styles.otherMessageWrapper}>
             {showAvatar && (
@@ -467,9 +753,61 @@ const ChatScreen = () => {
             {!showAvatar && <View style={styles.avatarSpacer} />}
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
+
+  const ImageViewerModal = () => (
+    <Modal
+      visible={imageViewerVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={closeImageViewer}
+    >
+      <View style={styles.imageViewerOverlay}>
+        <TouchableOpacity 
+          style={styles.imageViewerCloseButton}
+          onPress={closeImageViewer}
+        >
+          <Text style={styles.imageViewerCloseText}>✕</Text>
+        </TouchableOpacity>
+        <Image 
+          source={{ uri: viewingImage }} 
+          style={styles.imageViewerImage}
+          resizeMode="contain"
+        />
+      </View>
+    </Modal>
+  );
+
+  const ActionMenuModal = () => (
+    <Modal
+      visible={actionMenuVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={hideActionMenu}
+    >
+      <TouchableOpacity 
+        style={styles.actionMenuOverlay}
+        activeOpacity={1}
+        onPress={hideActionMenu}
+      >
+        <View style={[styles.actionMenuContent, { top: actionMenuPosition.y - 100, left: actionMenuPosition.x - 120 }]}>
+          {selectedMessage?.type === MessageType.TEXT && selectedMessage?.senderId === currentUser?.uid && (
+            <TouchableOpacity style={styles.actionMenuItem} onPress={handleEditMessage}>
+              <Text style={styles.actionMenuText}>✏️ Edit</Text>
+            </TouchableOpacity>
+          )}
+          
+          {selectedMessage?.senderId === currentUser?.uid && (
+            <TouchableOpacity style={styles.actionMenuItem} onPress={handleDeleteMessage}>
+              <Text style={[styles.actionMenuText, styles.deleteText]}>🗑️ Delete</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   if (loadingOtherUser) {
     return (
@@ -502,7 +840,9 @@ const ChatScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
+        <ImageViewerModal />
+        <ActionMenuModal />
+        
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
             <Text style={styles.backButtonText}>‹</Text>
@@ -526,7 +866,6 @@ const ChatScreen = () => {
             </Text>
           </View>
           
-          {/* Exit Chat Button - REPLACED the 3 dots */}
           <TouchableOpacity 
             style={styles.exitButton}
             onPress={handleExitChat}
@@ -592,17 +931,78 @@ const ChatScreen = () => {
               />
             )}
 
+            {editingMessage && (
+              <View style={styles.editContainer}>
+                <View style={styles.editContent}>
+                  <Text style={styles.editLabel}>Editing message</Text>
+                  <Text style={styles.editText} numberOfLines={2}>
+                    {editingMessage.content}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.cancelEditButton} onPress={cancelEdit}>
+                  <Text style={styles.cancelEditText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedImages.length > 0 && (
+              <View style={styles.imagesPreviewContainer}>
+                <Text style={styles.previewTitle}>
+                  Selected Images ({selectedImages.length}/3)
+                </Text>
+                <ScrollView 
+                  horizontal 
+                  style={styles.imagesPreviewScroll}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {selectedImages.map((image, index) => (
+                    <View key={index} style={styles.imagePreviewWrapper}>
+                      <Image 
+                        source={{ uri: image.uri }} 
+                        style={styles.imagePreview}
+                        resizeMode="cover"
+                      />
+                      <TouchableOpacity 
+                        style={styles.removePreviewButton}
+                        onPress={() => removeSelectedImage(index)}
+                      >
+                        <Text style={styles.removePreviewText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <View style={[
               styles.inputContainer,
               isKeyboardVisible && styles.inputContainerWithKeyboard
             ]}>
               <View style={styles.inputWrapper}>
+                <TouchableOpacity 
+                  style={[
+                    styles.attachButton,
+                    selectedImages.length >= 3 && styles.attachButtonDisabled
+                  ]}
+                  onPress={pickImages}
+                  disabled={sending || messagesLoading || selectedImages.length >= 3}
+                >
+                  <Text style={[
+                    styles.attachButtonText,
+                    selectedImages.length >= 3 && styles.attachButtonTextDisabled
+                  ]}>📷</Text>
+                </TouchableOpacity>
+                
                 <TextInput
                   ref={textInputRef}
                   style={styles.textInput}
                   value={newMessage}
                   onChangeText={setNewMessage}
-                  placeholder="Type a message..."
+                  placeholder={
+                    editingMessage ? "Edit your message..." :
+                    selectedImages.length > 0 ? "Add a caption..." : 
+                    "Type a message..."
+                  }
                   placeholderTextColor="#6B7280"
                   multiline
                   maxLength={500}
@@ -613,12 +1013,12 @@ const ChatScreen = () => {
                 <TouchableOpacity 
                   style={[
                     styles.sendButton,
-                    (!newMessage.trim() || sending || messagesLoading) && styles.sendButtonDisabled
+                    (!newMessage.trim() && selectedImages.length === 0) && styles.sendButtonDisabled
                   ]}
                   onPress={handleSendMessage}
-                  disabled={!newMessage.trim() || sending || messagesLoading}
+                  disabled={(!newMessage.trim() && selectedImages.length === 0) || sending || messagesLoading}
                 >
-                  {sending ? (
+                  {sending || uploadingImages ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <Text style={styles.sendButtonText}>➤</Text>
@@ -745,6 +1145,92 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: 8,
   },
+  editContainer: {
+    backgroundColor: '#fff3cd',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editContent: {
+    flex: 1,
+  },
+  editLabel: {
+    fontSize: 12,
+    color: '#856404',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  editText: {
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  cancelEditButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  cancelEditText: {
+    fontSize: 18,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  imagesPreviewContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    backgroundColor: '#f0f0f0',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  previewTitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  imagesPreviewScroll: {
+    flexDirection: 'row',
+    paddingVertical: 4,
+  },
+  imagePreviewWrapper: {
+    position: 'relative',
+    marginRight: 12,
+    marginTop: 4,
+
+  },
+  imagePreview: {
+    width: 85,
+    height: 85,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#01332fff",
+    backgroundColor: '#FFFFFF',
+ 
+  },
+  removePreviewButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#ff4444',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  removePreviewText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   messageContainer: {
     marginVertical: 4,
   },
@@ -856,6 +1342,38 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'left',
   },
+  imageBubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    maxWidth: 250,
+  },
+  myImageBubble: {
+    backgroundColor: '#01332fff',
+    borderColor: '#01332fff',
+  },
+  messageImage: {
+    width: 250,
+    height: 200,
+  },
+  imageCaption: {
+    padding: 8,
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  myImageCaption: {
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(1, 51, 47, 0.9)',
+  },
   inputContainer: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -875,6 +1393,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderWidth: 2,
     borderColor: "#E5E7EB",
+  },
+  attachButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  attachButtonDisabled: {
+    opacity: 0.5,
+  },
+  attachButtonText: {
+    fontSize: 24,
+    color: "#01332fff",
+  },
+  attachButtonTextDisabled: {
+    color: "#6B7280",
   },
   textInput: {
     flex: 1,
@@ -918,6 +1450,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     textAlign: 'center',
+  },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  imageViewerImage: {
+    width: width,
+    height: height * 0.7,
+  },
+  actionMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  actionMenuContent: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    minWidth: 150,
+  },
+  actionMenuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  actionMenuText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  deleteText: {
+    color: '#ff4444',
   },
 });
 

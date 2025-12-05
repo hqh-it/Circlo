@@ -4,13 +4,12 @@ export const ChannelType = {
   AUCTION: 'auction'         
 };
 
-
 export const MessageType = {
   TEXT: 'text',              
   BID: 'bid',               
-  SYSTEM: 'system'            
+  SYSTEM: 'system',
+  IMAGE: 'image'
 };
-
 
 export const MessageStatus = {
   SENT: 'sent',               
@@ -18,14 +17,12 @@ export const MessageStatus = {
   READ: 'read'               
 };
 
-
 export const AuctionStatus = {
   UPCOMING: 'upcoming',      
   LIVE: 'live',               
   ENDED: 'ended',           
   CANCELLED: 'cancelled'      
 };
-
 
 export const SystemMessageType = {
   HIGHEST_BIDDER: 'highest_bidder',
@@ -35,7 +32,6 @@ export const SystemMessageType = {
   USER_JOINED: 'user_joined',
   USER_LEFT: 'user_left'
 };
-
 
 export class AuctionOrderResult {
   constructor(
@@ -50,7 +46,6 @@ export class AuctionOrderResult {
     this.error = error;
   }
 }
-
 
 export class ChatChannel {
   constructor(
@@ -121,7 +116,9 @@ export class ChatMessage {
     type = MessageType.TEXT,     
     timestamp = null,           
     readBy = [],                 
-    status = MessageStatus.SENT 
+    status = MessageStatus.SENT,
+    imageUrl = '',
+    caption = ''
   ) {
     this.id = id;
     this.channelId = channelId;
@@ -131,9 +128,38 @@ export class ChatMessage {
     this.timestamp = timestamp;
     this.readBy = readBy;
     this.status = status;
+    this.imageUrl = imageUrl;
+    this.caption = caption;
   }
 }
 
+export class ImageMessage {
+  constructor(
+    id = '',
+    channelId = '',            
+    senderId = '',             
+    imageUrl = '',
+    thumbnailUrl = '',
+    caption = '',
+    type = MessageType.IMAGE,
+    timestamp = null,           
+    readBy = [],                
+    status = MessageStatus.SENT,
+    senderName = ''
+  ) {
+    this.id = id;
+    this.channelId = channelId;
+    this.senderId = senderId;
+    this.imageUrl = imageUrl;
+    this.thumbnailUrl = thumbnailUrl;
+    this.caption = caption;
+    this.type = type;
+    this.timestamp = timestamp;
+    this.readBy = readBy;
+    this.status = status;
+    this.senderName = senderName;
+  }
+}
 
 export class BidMessage {
   constructor(
@@ -161,7 +187,6 @@ export class BidMessage {
   }
 }
 
-
 export class SystemMessage {
   constructor(
     id = '',
@@ -183,7 +208,6 @@ export class SystemMessage {
     this.readBy = readBy;
   }
 }
-
 
 export class CreateChannelData {
   constructor(
@@ -221,7 +245,6 @@ export class CreateAuctionChannelData {
   }
 }
 
-
 export class PlaceBidData {
   constructor(
     channelId = '',           
@@ -238,7 +261,6 @@ export class PlaceBidData {
   }
 }
 
-
 export default {
   ChannelType,
   MessageType,
@@ -249,6 +271,7 @@ export default {
   ChatChannel,
   AuctionChannel,
   ChatMessage,
+  ImageMessage,
   BidMessage,
   SystemMessage,
   CreateChannelData,
