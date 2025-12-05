@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { canUserBuy } from '../../../services/Admin/StrustPointService';
 import { getAuctionProductById } from '../../../services/Auction/auctionService';
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { auctionChatService } from '../../../services/Chat/auctionChatService';
@@ -52,7 +53,6 @@ interface AuctionDetail {
   likeCount: number;
   createdAt: any;
   status: string;
-  likedBy?: string[];
   auctionInfo: {
     startTime: any;
     endTime: any;
@@ -94,7 +94,6 @@ const AuctionDetailScreen = () => {
     try {
       return new Date(timestamp);
     } catch (error) {
-      console.error('Error converting timestamp:', error);
       return new Date();
     }
   };
@@ -153,7 +152,6 @@ const AuctionDetailScreen = () => {
           }
         }
       } catch (error) {
-        console.error('Error updating countdown:', error);
         setTimeRemaining('Time error');
       }
     };
@@ -181,7 +179,6 @@ const AuctionDetailScreen = () => {
           router.back();
         }
       } catch (error) {
-        console.error('Error loading auction detail:', error);
         Alert.alert('Error', 'Failed to load auction details');
       } finally {
         setLoading(false);
@@ -192,9 +189,21 @@ const AuctionDetailScreen = () => {
   }, [auctionId, router, orderUpdated]);
 
   const imageItems = auction?.images || [];
-    const handleJoinAuction = async () => {
+
+  const handleJoinAuction = async () => {
     if (!auction || !user) {
       Alert.alert('Notification', 'Please log in to join the auction');
+      return;
+    }
+
+    const result = await canUserBuy(user.uid);
+    
+    if (!result.canBuy) {
+      Alert.alert(
+        "Cannot Join Auction",
+        `You need more than 40 trust points to join auctions.\nYour current points: ${result.points}`,
+        [{ text: "OK", style: "default" }]
+      );
       return;
     }
 
@@ -234,7 +243,6 @@ const AuctionDetailScreen = () => {
       });
 
     } catch (error) {
-      console.error('Error joining auction:', error);
       Alert.alert('Error', 'Cannot join auction room');
     }
   };
@@ -250,12 +258,27 @@ const AuctionDetailScreen = () => {
     });
   };
 
+  const handleBuyNowPress = async () => {
+    if (!user) {
+      Alert.alert('Notification', 'Please log in to purchase');
+      return;
+    }
+
+    const result = await canUserBuy(user.uid);
+    
+    if (!result.canBuy) {
+      Alert.alert(
+        "Cannot Purchase",
+        `You need more than 40 trust points to purchase products.\nYour current points: ${result.points}`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+
+    setShowBuyNowPopup(true);
+  };
+
   const handleBuyNowConfirm = (addressData: any, shippingFee: number, totalAmount: number) => {
-    console.log('Purchase request data:', {
-      addressData,
-      shippingFee,
-      totalAmount
-    });
     setShowBuyNowPopup(false);
     setOrderUpdated(prev => prev + 1);
     Alert.alert('Success', 'Purchase request sent successfully!');
@@ -503,9 +526,7 @@ const AuctionDetailScreen = () => {
                 <FollowButton 
                   targetUserId={auction.sellerId}
                   targetUserName={auction.sellerName}
-                  onFollowChange={(isFollowing) => {
-                    console.log(`Follow status changed: ${isFollowing}`);
-                  }}
+                  onFollowChange={(isFollowing) => {}}
                 />
               </View>
             </View>
@@ -537,7 +558,7 @@ const AuctionDetailScreen = () => {
         <BuyButton
           productId={auction.id}
           sellerId={auction.sellerId}
-          onPress={() => setShowBuyNowPopup(true)}
+          onPress={handleBuyNowPress}
           disabled={
             !isAuctionActive || 
             !auction.auctionInfo.buyNowPrice || 
@@ -989,18 +1010,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   joinAuctionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  buyNowButton: {
-    flex: 1,
-    backgroundColor: '#00A86B',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buyNowButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',

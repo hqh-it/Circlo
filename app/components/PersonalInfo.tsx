@@ -42,6 +42,7 @@ interface UserData {
   };
   avatarURL?: string;
   bankAccounts?: BankAccount[];
+  strustPoint?: number;
 }
 
 export default function PersonalInfo() {   
@@ -180,15 +181,26 @@ export default function PersonalInfo() {
           source={require('../assets/images/background_profile.jpg')} 
           style={styles.backgroundImage}
         >
-          <View style={styles.avatarContainer}>
-            <Image
-              source={
-                userData?.avatarURL
-                  ? { uri: userData.avatarURL }
-                  : require("../assets/icons/profile-picture.png")
-              }
-              style={styles.avatar}
-            />
+          <View style={styles.headerTop}>
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={
+                  userData?.avatarURL
+                    ? { uri: userData.avatarURL }
+                    : require("../assets/icons/profile-picture.png")
+                }
+                style={styles.avatar}
+              />
+              <View style={styles.strustPointContainer}>
+                <Image 
+                  source={require("../assets/icons/strustpoint.png")} 
+                  style={styles.strustPointIcon}
+                />
+                <Text style={styles.strustPointLabel}>
+                  Strust Point: {userData?.strustPoint || 100}
+                </Text>
+              </View>
+            </View>
             
             <View style={styles.followContainer}>
               <View style={styles.followColumn}>
@@ -470,11 +482,15 @@ const styles = StyleSheet.create({
   backgroundImage: {
     width: '100%',
   },
-  avatarContainer: {
+  headerTop: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingHorizontal: 15,
+    paddingVertical: 20,
+  },
+  avatarWrapper: {
+    alignItems: 'center',
   },
   avatar: {
     width: 80,
@@ -482,6 +498,26 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     borderWidth: 3,
     borderColor: "#D4A017",
+  },
+  strustPointContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 15,
+    backgroundColor: '#D4A017',
+  },
+  strustPointIcon: {
+    width: 15,
+    height: 15,
+    marginRight: 8,
+    tintColor: '#ffffff',
+  },
+  strustPointLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#ffffff',
   },
   followContainer: {
     flexDirection: 'column',
@@ -514,7 +550,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderColor: "white",
     paddingVertical: 10,
-    marginTop: 10,
   },
   orderColumn: {
     flexDirection: 'column',

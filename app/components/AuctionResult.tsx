@@ -71,37 +71,45 @@ const AuctionResult: React.FC<AuctionResultProps> = ({
     .sort((a, b) => new Date(a.timestamp?.toDate?.() || a.timestamp).getTime() - 
                     new Date(b.timestamp?.toDate?.() || b.timestamp).getTime());
 
-  useEffect(() => {
-    const createOrderAutomatically = async () => {
-      // Điều kiện chặt chẽ: chỉ tạo khi auction ended VÀ chưa có order VÀ có highestBidder
-      if (auctionChannel.highestBidder && 
-          auctionStatus === 'ended' && 
-          !auctionChannel.orderCreated) {
+useEffect(() => {
+  const createOrderAutomatically = async () => {
+   
+    if (auctionChannel.highestBidder && 
+        auctionStatus === 'ended' && 
+        !auctionChannel.orderCreated) {
+      
+      console.log('🔄 Attempting to create auction order...');
+      
+      try {
+        const result = await auctionChatService.endAuctionAndCreateOrderAutomatically(auctionChannel);
         
-        console.log('🔄 Attempting to create auction order...');
-        
-        try {
-          const result = await auctionChatService.endAuctionAndCreateOrderAutomatically(auctionChannel);
-          
-          if (result.success) {
-            console.log('✅ Auction order created automatically:', result.orderId);
-          } else {
-            console.log('ℹ️ Order creation result:', result.message);
-          }
-        } catch (error) {
-          console.error('❌ Error creating auction order:', error);
-        }
-      } else {
-        console.log('⏸️ Skipping order creation - conditions not met:', {
-          hasHighestBidder: !!auctionChannel.highestBidder,
-          auctionStatus,
-          orderCreated: auctionChannel.orderCreated
-        });
-      }
-    };
+        if (result.success) {
 
-    createOrderAutomatically();
-  }, [auctionChannel, auctionStatus]);
+          const orderId = (result as any).orderId || (result as any).orderData?.id;
+          if (orderId) {
+            console.log('✅ Auction order created automatically:', orderId);
+          } else {
+            console.log('✅ Order created successfully (no orderId returned)');
+          }
+        } else {
+
+          const message = (result as any).message || (result as any).error || 'Order creation failed';
+          console.log('ℹ️ Order creation result:', message);
+        }
+      } catch (error) {
+        console.error('❌ Error creating auction order:', error);
+      }
+    } else {
+      console.log('⏸️ Skipping order creation - conditions not met:', {
+        hasHighestBidder: !!auctionChannel.highestBidder,
+        auctionStatus,
+        orderCreated: auctionChannel.orderCreated
+      });
+    }
+  };
+
+  createOrderAutomatically();
+}, [auctionChannel, auctionStatus]);
 
   const isWinner = user?.uid === auctionChannel.highestBidder;
   const isSeller = user?.uid === auctionChannel.productInfo.sellerId;

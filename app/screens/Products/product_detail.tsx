@@ -14,9 +14,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { canUserBuy } from '../../../services/Admin/StrustPointService';
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { chatService } from '../../../services/Chat/chatService';
-import { getProductById, toggleProductLike } from '../../../services/Product/productService';
+import { getProductById } from '../../../services/Product/productService';
 import BuyButton from '../../components/BuyButton';
 import BuyNow from '../../components/BuyNow';
 import CommentSection from '../../components/CommentSection';
@@ -50,7 +51,6 @@ interface ProductDetail {
   likeCount: number;
   createdAt: any;
   status: string;
-  likedBy?: string[];
 }
 
 const ProductDetailScreen = () => {
@@ -61,7 +61,6 @@ const ProductDetailScreen = () => {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [mediaIndex, setMediaIndex] = useState(0);
-  const [liking, setLiking] = useState(false);
   const [videoRef, setVideoRef] = useState<any>(null);
   const [showBuyNowPopup, setShowBuyNowPopup] = useState(false);
   const [orderUpdated, setOrderUpdated] = useState(0);
@@ -85,7 +84,6 @@ const ProductDetailScreen = () => {
           router.back();
         }
       } catch (error) {
-        console.error('Error loading product detail:', error);
         Alert.alert('Error', 'Failed to load product details');
       } finally {
         setLoading(false);
@@ -97,56 +95,38 @@ const ProductDetailScreen = () => {
 
   const imageItems = product?.images || [];
 
-  const handleLikePress = async () => {
-    if (!product || !user || liking) return;
-    
-    try {
-      setLiking(true);
-      const result = await toggleProductLike(product.id, user.uid);
-      
-      if (result.success) {
-        setProduct(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            likeCount: result.newLikeCount || prev.likeCount + 1,
-            likedBy: [...(prev.likedBy || []), user?.uid || '']
-          };
-        });
-      } else {
-        Alert.alert('Error', result.error || 'Failed to like product');
-      }
-    } catch (error) {
-      console.error('Error liking product:', error);
-      Alert.alert('Error', 'Failed to like product');
-    } finally {
-      setLiking(false);
-    }
-  };
-
   const handleContactSeller = async () => {
-    if (!product || !user) {
-      Alert.alert('Nofification', 'Please log in to your account for chat with seller');
+    if (!product) return;
+    
+    if (!user) {
+      Alert.alert('Notification', 'Please log in to your account to chat with seller');
       return;
     }
+
+    const result = await canUserBuy(user.uid);
+    
+    if (!result.canBuy) {
+      Alert.alert(
+        "Cannot Contact Seller",
+        `You need more than 40 trust points to contact sellers.\nYour current points: ${result.points}`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+
     try {
-      console.log('🔄 Bắt đầu tạo/tìm phòng chat...');
-      
       const createData = {
         participants: [user.uid, product.sellerId],
-        
         participantDetails: {
           [user.uid]: {
             name: user.displayName || 'You', 
             avatar: user.photoURL || ''
           },
-
           [product.sellerId]: {
             name: product.sellerName, 
             avatar: product.sellerAvatar || ''
           }
         },
-
         productId: product.id,
         productInfo: {
           id: product.id,
@@ -158,12 +138,9 @@ const ProductDetailScreen = () => {
         type: 'direct'
       };
 
-      
-      const  result = await chatService.createOrGetChannel(createData);
+      const result = await chatService.createOrGetChannel(createData);
       
       if (result.success) {
-        console.log('✅ Phòng chat:', result.channelId);
-
         const productInfo = {
           id: product.id,
           title: product.title,
@@ -180,11 +157,10 @@ const ProductDetailScreen = () => {
           }
         });
       } else {
-        Alert.alert('Lỗi', 'Không thể tạo phòng chat: ' + result.error);
+        Alert.alert('Error', 'Could not create chat room: ' + result.error);
       }
     } catch (error) {
-      console.error('❌ Lỗi khi tạo phòng chat:', error);
-      Alert.alert('Lỗi', 'Không thể bắt đầu chat với người bán');
+      Alert.alert('Error', 'Could not start chat with seller');
     }
   };
 
@@ -199,12 +175,27 @@ const ProductDetailScreen = () => {
     });
   };
 
+  const handleBuyNowPress = async () => {
+    if (!user) {
+      Alert.alert('Notification', 'Please log in to your account to purchase');
+      return;
+    }
+    
+    const result = await canUserBuy(user.uid);
+    
+    if (!result.canBuy) {
+      Alert.alert(
+        "Cannot Purchase",
+        `You need more than 40 trust points to purchase products.\nYour current points: ${result.points}`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    
+    setShowBuyNowPopup(true);
+  };
+
   const handleBuyNowConfirm = (addressData: any, shippingFee: number, totalAmount: number) => {
-    console.log('Purchase request data:', {
-      addressData,
-      shippingFee,
-      totalAmount
-    });
     setShowBuyNowPopup(false);
     setOrderUpdated(prev => prev + 1);
     Alert.alert('Success', 'Purchase request sent successfully!');
@@ -279,7 +270,7 @@ const ProductDetailScreen = () => {
     );
   }
 
-  const isLiked = product.likedBy?.includes(user?.uid || '');
+  const isSeller = user?.uid === product.sellerId;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -335,20 +326,8 @@ const ProductDetailScreen = () => {
           <View style={styles.titleContainer}>
             <Text style={styles.title}>{product.title || 'No Title'}</Text>
           </View>
-          <View style={styles.priceLikeRow}>
+          <View style={styles.priceRow}>
             <Text style={styles.price}>💰 {product.price?.toLocaleString() || '0'} VND</Text>
-            <TouchableOpacity 
-              style={[styles.likeButton, isLiked && styles.likeButtonActive]}
-              onPress={handleLikePress}
-              disabled={liking}
-            >
-              <Text style={[styles.likeIcon, isLiked && styles.likeIconActive]}>
-                {isLiked ? '❤️' : '🤍'}
-              </Text>
-              <Text style={[styles.likeCount, isLiked && styles.likeCountActive]}>
-                {product.likeCount || 0}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.tagsSection}>
@@ -401,9 +380,7 @@ const ProductDetailScreen = () => {
                 <FollowButton 
                   targetUserId={product.sellerId}
                   targetUserName={product.sellerName}
-                  onFollowChange={(isFollowing) => {
-                    console.log(`Follow status changed: ${isFollowing}`);
-                  }}
+                  onFollowChange={(isFollowing) => {}}
                 />
               </View>
             </View>
@@ -457,8 +434,8 @@ const ProductDetailScreen = () => {
         <BuyButton
           productId={product.id}
           sellerId={product.sellerId}
-          onPress={() => setShowBuyNowPopup(true)}
-          disabled={product.status !== 'active' || user?.uid === product.sellerId}
+          onPress={handleBuyNowPress}
+          disabled={product.status !== 'active' || isSeller}
           refreshTrigger={orderUpdated}
         />
       </View>
@@ -518,7 +495,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  
   mediaSection: {
     backgroundColor: '#fff',
     marginBottom: 8,
@@ -578,7 +554,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-
   videoSection: {
     backgroundColor: '#fff',
     padding: 16,
@@ -614,14 +589,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginBottom: 12,
   },
-
   mainInfoSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -634,46 +607,13 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  priceLikeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  priceRow: {
     marginBottom: 16,
   },
   price: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#00A86B',
-  },
-  likeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e5e5ea',
-  },
-  likeButtonActive: {
-    backgroundColor: '#fff0f3',
-    borderColor: '#ff375f',
-  },
-  likeIcon: {
-    fontSize: 18,
-  },
-  likeIconActive: {
-    fontSize: 18,
-  },
-  likeCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8e8e93',
-  },
-  likeCountActive: {
-    color: '#ff375f',
-    fontWeight: '700',
   },
   titleContainer: {
     backgroundColor: '#fafafaff',
@@ -736,7 +676,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#333',
   },
-
   sellerSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -804,7 +743,6 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 22,
   },
-
   statsSection: {
     backgroundColor: '#fff',
     padding: 20,
@@ -840,7 +778,6 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
-
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -871,18 +808,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#00A86B',
-  },
-  buyButton: {
-    flex: 1,
-    backgroundColor: '#00A86B',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buyButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
   },
 });
 

@@ -2,7 +2,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { canUserSell } from "../../services/Admin/StrustPointService";
 import { useAuth } from "../../services/Auth/AuthContext";
 import { chatService } from "../../services/Chat/chatService";
 import { notificationService } from "../../services/Notification/notificationService";
@@ -21,7 +22,6 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [showAddOptions, setShowAddOptions] = useState(false);
 
-  // Real-time listeners
   useEffect(() => {
     if (!user) return;
 
@@ -44,15 +44,12 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
           }
         );
       } catch (error) {
-        console.error('Error setting up real-time listeners:', error);
-        // Fallback to periodic loading if real-time fails
         loadUnreadCounts();
       }
     };
 
     setupRealtimeListeners();
 
-    // Cleanup listeners on unmount
     return () => {
       if (unsubscribeChat) {
         unsubscribeChat();
@@ -67,22 +64,18 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
     try {
       if (!user) return;
       
-      // Load unread chat messages count
       const chatCount = await chatService.getUnreadMessagesCount(user.uid);
       setUnreadChatCount(chatCount);
       
-      // Load unread notifications count
       const notificationCount = await notificationService.getUnreadCount(user.uid);
       setUnreadNotificationCount(notificationCount);
     } catch (error) {
-      console.error('Error loading unread counts:', error);
     }
   };
 
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        // Refresh data when screen comes into focus as backup
         loadUnreadCounts();
       }
     }, [user])
@@ -101,19 +94,29 @@ export default function Appfooter({ onTabChange, currentTab = 'normal' }: AppFoo
   };
 
   const handleNotificationPress = () => {
-    // Reset notification count when user clicks on notification icon
     setUnreadNotificationCount(0);
     router.push('/screens/Notification/NotificationScreen');
   };
 
   const handleChatPress = () => {
-    // Reset chat count when user clicks on chat icon
     setUnreadChatCount(0);
     router.push("/screens/Chat/chatListScreen");
   };
 
-  const handleAddPress = () => {
-    setShowAddOptions(true);
+  const handleAddPress = async () => {
+    if (!user) return;
+    
+    const result = await canUserSell(user.uid);
+    
+    if (result.canSell) {
+      setShowAddOptions(true);
+    } else {
+      Alert.alert(
+        "Cannot Add Product",
+        `You need more than 60 trust points to add products for sale.\nYour current points: ${result.points}`,
+        [{ text: "OK", style: "default" }]
+      );
+    }
   };
 
   const handleNormalProduct = () => {

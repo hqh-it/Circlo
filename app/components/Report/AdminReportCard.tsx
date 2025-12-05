@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { sendWarningToUser } from '../../../services/Admin/AdminNotificationService';
 import { deactivateUser } from '../../../services/Admin/AdminUserService';
+import { deductPoints } from '../../../services/Admin/StrustPointService';
 import { getRejectionReasons, rejectReport, resolveReport, updateReportStatus } from '../../../services/Report/ReportService';
 import SuspensionModal from '../Admin/User/SuspensionModal';
 
@@ -94,7 +95,7 @@ const AdminReportCard: React.FC<AdminReportCardProps> = ({ report, onReportUpdat
     setShowActionModal(true);
   };
 
-  const handleConfirmAction = async (reason: string, duration: number, customReason?: string) => {
+  const handleConfirmAction = async (reason: string, duration: number, customReason?: string, level?: string) => {
     setUpdating(true);
     try {
       const finalReason = customReason || reason;
@@ -117,6 +118,7 @@ const AdminReportCard: React.FC<AdminReportCardProps> = ({ report, onReportUpdat
         );
         
         if (resolveResult.success) {
+          const deductResult = await deductPoints(report.reportedUserId, level || 'WARNING', finalReason);
           Alert.alert('Success', 'Warning has been sent and report resolved');
           onReportUpdate();
         } else {
@@ -141,6 +143,7 @@ const AdminReportCard: React.FC<AdminReportCardProps> = ({ report, onReportUpdat
         );
         
         if (resolveResult.success) {
+          const deductResult = await deductPoints(report.reportedUserId, level || 'LOW', finalReason);
           Alert.alert('Success', 'User has been suspended and report resolved');
           onReportUpdate();
         } else {

@@ -32,6 +32,7 @@ interface PublicUserData {
     province?: string;
     fullAddress?: string;
   };
+  strustPoint?: number;
 }
 
 const PublicProfile: React.FC = () => {
@@ -68,6 +69,7 @@ const PublicProfile: React.FC = () => {
             phone: data.phone,
             avatarURL: data.avatarURL,
             address: data.address || {},
+            strustPoint: data.strustPoint || 100,
           });
 
           const counts = await getFollowCounts(userId);
@@ -155,7 +157,9 @@ const PublicProfile: React.FC = () => {
                       source={require("../../assets/icons/strustpoint.png")} 
                       style={styles.strustPointIcon}
                     />
-                    <Text style={styles.strustPointLabel}>Strust Point: 100</Text>
+                    <Text style={styles.strustPointLabel}>
+                      Strust Point: {userData.strustPoint || 100}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -374,21 +378,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    marginRight: 25,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 15,
+    backgroundColor: '#D4A017',
   },
   strustPointIcon: {
     width: 15,
     height: 15,
     marginRight: 8,
-    tintColor: '#D4A017',
+    tintColor: '#ffffff',
   },
   strustPointLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#ffffffff',
-    backgroundColor: '#D4A017',
-    padding:5,
-    borderRadius: 5,
+    color: '#ffffff',
   },
   followBottomRight: {
     position: 'absolute',
@@ -429,11 +433,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 3,
-  },
-  reportIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#ffffff',
   },
   reportLabel: {
     fontSize: 8,

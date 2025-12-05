@@ -16,7 +16,6 @@ export const DEDUCTION_POINTS = {
   SEVERE: 50
 };
 
-
 export async function canUserBuy(userId) {
   try {
     const userDoc = await getDoc(doc(db, "users", userId));
@@ -31,11 +30,9 @@ export async function canUserBuy(userId) {
     return {
       canBuy,
       points,
-      isBanned,
-      message: canBuy ? "Can buy products" : `Cannot buy (need >${TRUST_POINT_CONFIG.CANNOT_BUY} points)`
+      isBanned
     };
   } catch (error) {
-    console.error("Check buy error:", error);
     return { canBuy: false, error: error.message };
   }
 }
@@ -54,11 +51,9 @@ export async function canUserSell(userId) {
     return {
       canSell,
       points,
-      isBanned,
-      message: canSell ? "Can sell products" : `Cannot sell (need >${TRUST_POINT_CONFIG.CANNOT_SELL} points)`
+      isBanned
     };
   } catch (error) {
-    console.error("Check sell error:", error);
     return { canSell: false, error: error.message };
   }
 }
@@ -92,11 +87,9 @@ export async function deductPoints(userId, level = 'LOW', reason = "Violation") 
     
     return result;
   } catch (error) {
-    console.error("Deduct points error:", error);
     return { success: false, error: error.message };
   }
 }
-
 
 export async function checkMonthlyRecovery(userId) {
   try {
@@ -140,7 +133,6 @@ export async function checkMonthlyRecovery(userId) {
     };
     
   } catch (error) {
-    console.error("Recovery error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -159,11 +151,9 @@ export async function getUserTrustInfo(userId) {
       isBanned,
       canBuy: points > TRUST_POINT_CONFIG.CANNOT_BUY && !isBanned,
       canSell: points > TRUST_POINT_CONFIG.CANNOT_SELL && !isBanned,
-      lastRecovery: userData.lastRecoveryDate || null,
-      level: getPointLevel(points)
+      lastRecovery: userData.lastRecoveryDate || null
     };
   } catch (error) {
-    console.error("Get trust info error:", error);
     return { error: error.message };
   }
 }

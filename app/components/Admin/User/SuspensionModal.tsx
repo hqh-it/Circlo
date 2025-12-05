@@ -1,4 +1,3 @@
-// components/Admin/User/SuspensionModal.tsx
 import React, { useEffect, useState } from 'react';
 import {
   FlatList,
@@ -22,7 +21,7 @@ export interface SuspensionReason {
 interface SuspensionModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (reason: string, duration: number, customReason?: string) => void;
+  onConfirm: (reason: string, duration: number, customReason?: string, level?: string) => void;
   userName: string;
   preSelectedReason?: string;
   preSelectedLevel?: string;
@@ -164,7 +163,7 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
       }
     }
     
-    onConfirm(selectedReason.label, duration, customDuration || '');
+    onConfirm(selectedReason.label, duration, customDuration || '', selectedReason.level);
     resetForm();
   };
 
