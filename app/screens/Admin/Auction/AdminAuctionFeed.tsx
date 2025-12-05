@@ -1,17 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { getAuctionProducts } from '../../../../services/Auction/auctionService';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { getAuctionProducts, searchAuctionProducts } from '../../../../services/Auction/auctionService';
 import AdminProductCard from '../../../components/Admin/Product/AdminProductCard';
+import SearchBar from '../../../components/SearchBar';
 
 interface AuctionProduct {
   id: string;
@@ -57,8 +60,10 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'active' | 'pending'>(initialTab);
   const [products, setProducts] = useState<AuctionProduct[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<AuctionProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   const loadAuctionProducts = useCallback(async () => {
     try {
@@ -102,12 +107,15 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
         );
         
         setProducts(filteredProducts);
+        setFilteredProducts(filteredProducts);
       } else {
         setProducts([]);
+        setFilteredProducts([]);
       }
     } catch (error) {
       console.error('Error loading auction products:', error);
       setProducts([]);
+      setFilteredProducts([]);
     }
   }, [activeTab]);
 
@@ -129,6 +137,78 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
       setRefreshing(false);
     }
   }, [loadAuctionProducts]);
+
+  const handleSearchResults = async (searchTerm: string) => {
+    setIsSearching(true);
+    
+    if (!searchTerm.trim()) {
+      setFilteredProducts(products);
+      setIsSearching(false);
+      return;
+    }
+
+    try {
+      const result = await searchAuctionProducts(searchTerm);
+      if (result.success) {
+        const filtered = result.products.filter(product => 
+          product.status === activeTab
+        );
+        
+        const auctionProducts = filtered.map(auction => {
+          const auctionData = auction.auctionInfo || {};
+          
+          return {
+            id: auction.id,
+            type: 'auction' as const,
+            images: auction.images || [],
+            title: auction.title || 'No Title',
+            price: auction.startPrice || auction.currentBid || 0,
+            address: auction.address || {},
+            likeCount: auction.likeCount || 0,
+            viewCount: auction.viewCount || 0,
+            sellerAvatar: auction.sellerAvatar,
+            sellerName: auction.sellerName || 'Unknown Seller',
+            condition: auction.condition || 'used',
+            createdAt: auction.createdAt,
+            sellerId: auction.sellerId,
+            status: auction.status || 'pending',
+            auctionInfo: {
+              currentBid: auction.currentBid || auction.startPrice || 0,
+              startPrice: auction.startPrice || 0,
+              startTime: auctionData.startTime,
+              endTime: auctionData.endTime,
+              bidCount: auctionData.bidCount || 0,
+              status: auctionData.status || 'active',
+              bidIncrement: auctionData.bidIncrement || 0,
+              buyNowPrice: auctionData.buyNowPrice,
+              highestBidder: auctionData.highestBidder
+            }
+          };
+        });
+        
+        setFilteredProducts(auctionProducts);
+      } else {
+        setFilteredProducts([]);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setFilteredProducts([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchStart = () => {
+    setIsSearching(true);
+  };
+
+  const handleSearchEnd = () => {
+    setIsSearching(false);
+  };
+
+  const handleClearSearch = () => {
+    setFilteredProducts(products);
+  };
 
   const handleApproveProduct = async (productId: string) => {
     try {
@@ -164,6 +244,10 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
     });
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   useEffect(() => {
     loadProducts();
   }, [activeTab]);
@@ -173,8 +257,8 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
   };
 
   const getProductStats = () => {
-    const pendingCount = products.filter(p => p.status === 'pending').length;
-    const activeCount = products.filter(p => p.status === 'active').length;
+    const pendingCount = filteredProducts.filter(p => p.status === 'pending').length;
+    const activeCount = filteredProducts.filter(p => p.status === 'active').length;
     
     return { pendingCount, activeCount };
   };
@@ -191,7 +275,37 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* Custom Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#003B36" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Auction Management</Text>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
+      
+      <View style={styles.searchContainer}>
+        <SearchBar
+          placeholder="Search auctions..."
+          onSearchResults={(results) => {
+            const searchResults = results.filter(product => product.status === activeTab);
+            setFilteredProducts(searchResults);
+          }}
+          onSearchStart={handleSearchStart}
+          onSearchEnd={handleSearchEnd}
+          onClearSearch={handleClearSearch}
+          productType="auction"
+        />
+      </View>
+      
+      {isSearching && (
+        <View style={styles.searchingIndicator}>
+          <ActivityIndicator size="small" color="#00A86B" />
+          <Text style={styles.searchingText}>Searching...</Text>
+        </View>
+      )}
+
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
@@ -222,13 +336,13 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
           <Text style={styles.statLabel}>Pending</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{products.length}</Text>
+          <Text style={styles.statNumber}>{filteredProducts.length}</Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
       </View>
 
       <FlatList
-        data={products}
+        data={filteredProducts}
         renderItem={({ item }) => (
           <AdminProductCard
             product={item}
@@ -249,14 +363,21 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              No {activeTab} auctions found
-            </Text>
+            {isSearching ? (
+              <>
+                <ActivityIndicator size="large" color="#00A86B" />
+                <Text style={styles.emptyText}>Searching auctions...</Text>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>
+                No {activeTab} auctions found
+              </Text>
+            )}
           </View>
         }
-        contentContainerStyle={products.length === 0 ? styles.emptyListContent : undefined}
+        contentContainerStyle={filteredProducts.length === 0 ? styles.emptyListContent : styles.listContent}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -264,6 +385,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  // Custom Header Styles
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaeaea',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#003B36',
+  },
+  headerRightPlaceholder: {
+    width: 40, // Balance the layout
+  },
+  searchContainer: {
+    padding: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+  },
+  searchingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    backgroundColor: '#f0f9f0',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  searchingText: {
+    marginLeft: 8,
+    color: '#00A86B',
+    fontSize: 12,
   },
   centerContainer: {
     flex: 1,
@@ -327,6 +490,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+  },
+  listContent: {
+    padding: 16,
+    paddingTop: 0,
+    paddingBottom: 20,
   },
   emptyContainer: {
     flex: 1,

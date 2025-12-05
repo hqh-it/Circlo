@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   Keyboard,
   StyleSheet,
@@ -9,8 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-const { width, height } = Dimensions.get('window');
 
 interface SearchBarProps {
   placeholder?: string;
@@ -160,21 +157,18 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={[
-        styles.searchContainer,
-        isFocused && styles.searchContainerFocused,
-      ]}>
+      <View style={styles.searchContainer}>
         <Image
           source={require('../assets/icons/search.png')}
           style={styles.searchIcon}
         />
         
         <TextInput
-          style={styles.textInput}
+          style={styles.input}
           value={searchText}
           onChangeText={handleTextChange}
           placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#999"
           returnKeyType="search"
           onSubmitEditing={handleSearch}
           onFocus={handleFocus}
@@ -184,7 +178,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           autoCorrect={false}
         />
         
-        <View style={styles.rightContainer}>
+        <View style={styles.rightSection}>
           {isSearching ? (
             <ActivityIndicator size="small" color="#00A86B" />
           ) : searchText.length > 0 ? (
@@ -203,56 +197,33 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: width,
-    height: height * 0.1,
-    paddingHorizontal: width * 0.04,
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 2,
-    borderBottomColor: '#E5E7EB',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: height * 0.06,
-    borderWidth: 2,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  searchContainerFocused: {
-    borderColor: '#00A86B',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#00A86B',
-    shadowOpacity: 0.2,
-    elevation: 5,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44,
   },
   searchIcon: {
     width: 20,
     height: 20,
-    tintColor: '#6B7280',
-    marginRight: 12,
+    tintColor: '#666',
+    marginRight: 8,
   },
-  textInput: {
+  input: {
     flex: 1,
     fontSize: 16,
-    color: '#1F2937',
-    padding: 0,
-    includeFontPadding: false,
+    color: '#333',
+    paddingVertical: 0,
   },
-  rightContainer: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
+  rightSection: {
+    width: 30,
     alignItems: 'center',
   },
   clearButton: {
@@ -261,7 +232,7 @@ const styles = StyleSheet.create({
   clearIcon: {
     width: 18,
     height: 18,
-    tintColor: '#6B7280',
+    tintColor: '#666',
   },
 });
 

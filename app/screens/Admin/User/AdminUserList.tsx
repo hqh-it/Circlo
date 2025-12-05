@@ -1,4 +1,4 @@
-// screens/Admin/AdminUserList.tsx
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../../../firebaseConfig';
 import AdminUserCard from '../../../components/Admin/User/AdminUserCard';
-import Header from '../../../components/header_for_detail';
+import UserSearchBar from '../../../components/UserSearchBar';
 
 interface User {
   id: string;
@@ -28,58 +28,88 @@ interface User {
   isSuspended?: boolean;
   suspendReason?: string;
   suspendedUntil?: any;
+  strustPoint?: number;
 }
 
 const AdminUserList: React.FC = () => {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const usersQuery = query(
-        collection(db, "users"), 
-        orderBy("createdAt", "desc")
-      );
+      
+      const usersRef = collection(db, 'users');
+      const usersQuery = query(usersRef, orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(usersQuery);
       
       const usersList: User[] = [];
+      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        if (data.role !== 'admin') {
-          usersList.push({
-            id: doc.id,
-            fullName: data.fullName || 'No Name',
-            email: data.email,
-            avatarURL: data.avatarURL,
-            role: data.role || 'user',
-            createdAt: data.createdAt,
-            isActive: data.isActive !== false,
-            isBanned: data.isBanned === true,
-            isSuspended: data.isSuspended === true,
-            suspendReason: data.suspendReason,
-            suspendedUntil: data.suspendedUntil
-          });
-        }
+        usersList.push({
+          id: doc.id,
+          fullName: data.fullName || '',
+          email: data.email || '',
+          avatarURL: data.avatarURL,
+          role: data.role || 'user',
+          createdAt: data.createdAt,
+          isActive: data.isActive !== false,
+          isBanned: data.isBanned === true,
+          isSuspended: data.isSuspended === true,
+          suspendReason: data.suspendReason,
+          suspendedUntil: data.suspendedUntil,
+          strustPoint: data.strustPoint || 100,
+        });
       });
+
+      const nonAdminUsers = usersList.filter(user => user.role !== 'admin');
       
-      setUsers(usersList);
+      setUsers(nonAdminUsers);
+      setFilteredUsers(nonAdminUsers);
+      
     } catch (error) {
       console.error("Load users error:", error);
-      alert('Failed to load users');
+      setUsers([]);
+      setFilteredUsers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  const handleSearch = (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setFilteredUsers(users);
+      return;
+    }
+
+    const filtered = users.filter(user => {
+      const fullName = user.fullName?.toLowerCase() || '';
+      const email = user.email?.toLowerCase() || '';
+      const search = searchTerm.toLowerCase();
+      
+      return fullName.includes(search) || email.includes(search);
+    });
+    
+    setFilteredUsers(filtered);
+  };
+
+  const handleClearSearch = () => {
+    setFilteredUsers(users);
+  };
+
+  const handleGoBack = () => {
+    router.back();
+  };
+
   useEffect(() => {
     loadUsers();
   }, []);
 
-  // Sử dụng useFocusEffect để refresh khi quay lại màn hình
   useFocusEffect(
     useCallback(() => {
       loadUsers();
@@ -108,14 +138,27 @@ const AdminUserList: React.FC = () => {
     );
   }
 
-  const suspendedUsers = users.filter(user => user.isSuspended && !user.isBanned);
-  const bannedUsers = users.filter(user => user.isBanned);
-  const activeUsers = users.filter(user => !user.isSuspended && !user.isBanned);
+  const suspendedUsers = filteredUsers.filter(user => user.isSuspended && !user.isBanned);
+  const bannedUsers = filteredUsers.filter(user => user.isBanned);
+  const activeUsers = filteredUsers.filter(user => !user.isSuspended && !user.isBanned);
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="User Management" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#003B36" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>User Management</Text>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
       
+      <UserSearchBar
+        placeholder="Search users by name or email..."
+        onSearch={handleSearch}
+        isLoading={false}
+        onClear={handleClearSearch}
+      />
+
       <View style={styles.navigationSection}>
         <TouchableOpacity 
           style={styles.reportButton}
@@ -141,7 +184,7 @@ const AdminUserList: React.FC = () => {
       </View>
 
       <FlatList
-        data={users}
+        data={filteredUsers}
         renderItem={({ item }) => (
           <AdminUserCard 
             user={item} 
@@ -156,9 +199,6 @@ const AdminUserList: React.FC = () => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No users found</Text>
-            <Text style={styles.emptySubText}>
-              All accounts are administrator accounts
-            </Text>
           </View>
         }
       />
@@ -176,6 +216,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaeaea',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#003B36',
+  },
+  headerRightPlaceholder: {
+    width: 40,
   },
   navigationSection: {
     padding: 16,
@@ -241,11 +302,6 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginBottom: 8,
-  },
-  emptySubText: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
   },
 });
 

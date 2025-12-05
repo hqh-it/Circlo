@@ -1,4 +1,3 @@
-// AdminProductCard.tsx
 import { useRouter } from "expo-router";
 import React, { useState } from 'react';
 import {
@@ -425,7 +424,7 @@ const AdminProductCard: React.FC<AdminProductCardProps> = ({
             style={[styles.actionButton, styles.viewButton]}
             onPress={handleViewDetail}
           >
-            <Text style={styles.viewButtonText}>👁 View</Text>
+            <Text style={styles.actionButtonText}>👁 View</Text>
           </TouchableOpacity>
           
           {/* Nút Approve/Reject chỉ hiển thị cho pending */}
@@ -436,8 +435,8 @@ const AdminProductCard: React.FC<AdminProductCardProps> = ({
                 onPress={handleApprove}
                 disabled={actionLoading}
               >
-                <Text style={styles.approveButtonText}>
-                  {actionLoading ? '...' : '✓ Approve'}
+                <Text style={styles.actionButtonText}>
+                  ✓ Approve
                 </Text>
               </TouchableOpacity>
               
@@ -446,8 +445,8 @@ const AdminProductCard: React.FC<AdminProductCardProps> = ({
                 onPress={handleReject}
                 disabled={actionLoading}
               >
-                <Text style={styles.rejectButtonText}>
-                  {actionLoading ? '...' : '✗ Reject'}
+                <Text style={styles.actionButtonText}>
+                  ✗ Reject
                 </Text>
               </TouchableOpacity>
             </>
@@ -459,8 +458,8 @@ const AdminProductCard: React.FC<AdminProductCardProps> = ({
             onPress={handleDelete}
             disabled={actionLoading}
           >
-            <Text style={styles.deleteButtonText}>
-              {actionLoading ? '...' : '🗑 Delete'}
+            <Text style={styles.actionButtonText}>
+              🗑 Delete
             </Text>
           </TouchableOpacity>
         </View>
@@ -559,15 +558,14 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    gap: 10,
   },
   actionButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -575,54 +573,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
-    minHeight: 44,
+    minWidth: 80,
   },
   viewButton: {
     backgroundColor: '#e3f2fd',
     borderWidth: 1,
     borderColor: '#2196f3',
-    flex: 1,
   },
   approveButton: {
     backgroundColor: '#e8f5e8',
     borderWidth: 1,
     borderColor: '#4CAF50',
-    flex: 1,
   },
   rejectButton: {
     backgroundColor: '#ffebee',
     borderWidth: 1,
     borderColor: '#f44336',
-    flex: 1,
   },
   deleteButton: {
     backgroundColor: '#fff8f8',
     borderWidth: 1,
     borderColor: '#ff4444',
-    flex: 1,
   },
-  viewButtonText: {
-    fontSize: 13,
+  actionButtonText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#2196f3',
-    textAlign: 'center',
-  },
-  approveButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4CAF50',
-    textAlign: 'center',
-  },
-  rejectButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#f44336',
-    textAlign: 'center',
-  },
-  deleteButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#ff4444',
+    color: '#333',
     textAlign: 'center',
   },
   modalOverlay: {

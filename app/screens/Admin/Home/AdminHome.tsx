@@ -1,4 +1,3 @@
-// screens/Admin/AdminHome.tsx
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -33,10 +32,6 @@ export default function AdminHome() {
     router.push("/screens/Admin/Auction/AdminAuctionFeed");
   };
 
-  const handleViewReports = () => {
-    alert("Reports feature coming soon!");
-  };
-
   return (
     <LinearGradient
       colors={["#003B36", "#dafff1ff", "#66f2f0ff", "#f2f266ff"]}
@@ -47,65 +42,108 @@ export default function AdminHome() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Image 
-            style={styles.logo} 
+            style={styles.avatar} 
             source={require('../../../assets/images/logo.png')}
           />
-          <Text style={styles.adminTitle}>👑 ADMIN DASHBOARD</Text>
-          <Text style={styles.welcomeText}>Welcome Administrator!</Text>
+          <Text style={styles.adminTitle}>Administrator Panel</Text>
+          <Text style={styles.welcomeText}>Welcome back, {auth.currentUser?.email?.split('@')[0] || 'Admin'}!</Text>
+        </View>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>👥</Text>
+            <Text style={styles.statLabel}>User</Text>
+            <Text style={styles.statText}>Management</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>📦</Text>
+            <Text style={styles.statLabel}>Product</Text>
+            <Text style={styles.statText}>Management</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>⚡</Text>
+            <Text style={styles.statLabel}>Auction</Text>
+            <Text style={styles.statText}>Management</Text>
+          </View>
         </View>
 
         <View style={styles.featuresContainer}>
-          <Text style={styles.sectionTitle}>SYSTEM MANAGEMENT</Text>
-          
-          <TouchableOpacity style={styles.featureButton} onPress={handleManageUsers}>
+          <TouchableOpacity style={styles.featureCard} onPress={handleManageUsers}>
             <LinearGradient
-              colors={["#4CAF50", "#45a049"]}
-              style={styles.gradientButton}
+              colors={["#3B82F6", "#1D4ED8"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.featureGradient}
             >
-              <Text style={styles.featureText}>👥 User Management</Text>
+              <View style={styles.featureIconContainer}>
+                <Text style={styles.featureIcon}>👥</Text>
+              </View>
+              <View style={styles.featureContent}>
+                <Text style={styles.featureTitle}>User Management</Text>
+                <Text style={styles.featureDescription}>Manage all user accounts and permissions</Text>
+              </View>
+              <View style={styles.featureArrow}>
+                <Text style={styles.arrowText}>›</Text>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.featureButton} onPress={handleManageProducts}>
+          <TouchableOpacity style={styles.featureCard} onPress={handleManageProducts}>
             <LinearGradient
-              colors={["#2196F3", "#1976D2"]}
-              style={styles.gradientButton}
+              colors={["#10B981", "#059669"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.featureGradient}
             >
-              <Text style={styles.featureText}>📦 Product Management</Text>
+              <View style={styles.featureIconContainer}>
+                <Text style={styles.featureIcon}>📦</Text>
+              </View>
+              <View style={styles.featureContent}>
+                <Text style={styles.featureTitle}>Product Management</Text>
+                <Text style={styles.featureDescription}>Approve, reject or delete products</Text>
+              </View>
+              <View style={styles.featureArrow}>
+                <Text style={styles.arrowText}>›</Text>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.featureButton} onPress={handleManageAuctions}>
+          <TouchableOpacity style={styles.featureCard} onPress={handleManageAuctions}>
             <LinearGradient
-              colors={["#FF9800", "#F57C00"]}
-              style={styles.gradientButton}
+              colors={["#F59E0B", "#D97706"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.featureGradient}
             >
-              <Text style={styles.featureText}>⚡ Auction Management</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.featureButton} onPress={handleViewReports}>
-            <LinearGradient
-              colors={["#9C27B0", "#7B1FA2"]}
-              style={styles.gradientButton}
-            >
-              <Text style={styles.featureText}>📊 Reports & Analytics</Text>
+              <View style={styles.featureIconContainer}>
+                <Text style={styles.featureIcon}>⚡</Text>
+              </View>
+              <View style={styles.featureContent}>
+                <Text style={styles.featureTitle}>Auction Management</Text>
+                <Text style={styles.featureDescription}>Manage auction listings and bids</Text>
+              </View>
+              <View style={styles.featureArrow}>
+                <Text style={styles.arrowText}>›</Text>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <LinearGradient
-            colors={["#ff4444", "#cc0000"]}
-            style={styles.gradientButton}
+            colors={["#EF4444", "#DC2626"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.logoutGradient}
           >
-            <Text style={styles.logoutText}>🚪 Logout</Text>
+            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={styles.logoutText}>Logout</Text>
           </LinearGradient>
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Role: Administrator</Text>
-          <Text style={styles.footerText}>Email: {auth.currentUser?.email}</Text>
+          <Text style={styles.footerText}>Admin System v1.0</Text>
+          <Text style={styles.footerEmail}>{auth.currentUser?.email}</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -119,92 +157,176 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
+    paddingTop: 20,
   },
   header: {
     alignItems: "center",
+    marginBottom: 32,
     marginTop: 20,
-    marginBottom: 30,
   },
-  logo: {
-    height: height * 0.12,
-    width: height * 0.12,
-    borderRadius: 20,
-    borderWidth: 5,
-    borderColor: "#00A86B",
+  avatar: {
+    height: 100,
+    width: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: '#00A86B',
+    marginBottom: 16,
   },
   adminTitle: {
-    fontSize: 24,
-    fontWeight: "900",
+    fontSize: 28,
+    fontWeight: "800",
     color: "#003B36",
-    marginTop: 10,
-    textShadowColor: "#ffbb00",
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
   welcomeText: {
     fontSize: 16,
     color: "#003B36",
-    marginTop: 5,
+    textAlign: 'center',
     fontWeight: "600",
+    opacity: 0.8,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 59, 54, 0.1)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statNumber: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#003B36',
+    marginBottom: 2,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#666666',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   featuresContainer: {
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 32,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#003B36",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  featureButton: {
-    width: "90%",
-    marginBottom: 15,
-    borderRadius: 12,
+  featureCard: {
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  gradientButton: {
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: "center",
+  featureGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 20,
   },
-  featureText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
+  featureIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  featureIcon: {
+    fontSize: 24,
+  },
+  featureContent: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    marginBottom: 4,
+  },
+  featureDescription: {
+    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.9)",
+    fontWeight: "400",
+  },
+  featureArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrowText: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   logoutButton: {
-    width: "80%",
-    borderRadius: 12,
-    marginTop: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 32,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowRadius: 4,
     elevation: 5,
+  },
+  logoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+  },
+  logoutIcon: {
+    fontSize: 20,
+    marginRight: 12,
   },
   logoutText: {
     color: "white",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
   },
   footer: {
-    position: "absolute",
-    bottom: 30,
-    alignItems: "center",
+    alignItems: 'center',
+    marginBottom: 20,
   },
   footerText: {
     fontSize: 12,
-    color: "#003B36",
-    marginBottom: 5,
+    color: '#003B36',
+    marginBottom: 4,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+  footerEmail: {
+    fontSize: 11,
+    color: '#003B36',
+    fontWeight: '500',
+    opacity: 0.6,
   },
 });

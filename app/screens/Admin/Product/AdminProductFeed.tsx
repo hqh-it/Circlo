@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -11,8 +12,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../../../firebaseConfig';
+import { searchProducts } from '../../../../services/Product/productService';
 import AdminProductCard from '../../../components/Admin/Product/AdminProductCard';
+import SearchBar from '../../../components/SearchBar';
 
 interface Product {
   id: string;
@@ -47,8 +51,11 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'active' | 'pending'>(initialTab);
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     try {
@@ -78,6 +85,7 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
       });
 
       setProducts(normalProducts);
+      setFilteredProducts(normalProducts);
 
     } catch (error) {
       console.error('Error loading products:', error);
@@ -87,6 +95,45 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
       setRefreshing(false);
     }
   }, [activeTab]);
+
+  const handleSearchResults = async (searchTerm: string) => {
+    setIsSearching(true);
+    
+    if (!searchTerm.trim()) {
+      setFilteredProducts(products);
+      setIsSearching(false);
+      return;
+    }
+
+    try {
+      const result = await searchProducts(searchTerm);
+      if (result.success) {
+        const filtered = result.products.filter(product => 
+          product.status === activeTab
+        );
+        setFilteredProducts(filtered);
+      } else {
+        setFilteredProducts([]);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setFilteredProducts([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchStart = () => {
+    setIsSearching(true);
+  };
+
+  const handleSearchEnd = () => {
+    setIsSearching(false);
+  };
+
+  const handleClearSearch = () => {
+    setFilteredProducts(products);
+  };
 
   const handleApproveProduct = async (productId: string) => {
     await loadProducts(true);
@@ -111,6 +158,10 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
     loadProducts(true);
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   useEffect(() => {
     loadProducts();
   }, [activeTab]);
@@ -120,8 +171,8 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
   };
 
   const getProductStats = () => {
-    const pendingCount = products.filter(p => p.status === 'pending').length;
-    const activeCount = products.filter(p => p.status === 'active').length;
+    const pendingCount = filteredProducts.filter(p => p.status === 'pending').length;
+    const activeCount = filteredProducts.filter(p => p.status === 'active').length;
     
     return { pendingCount, activeCount };
   };
@@ -138,7 +189,37 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* Custom Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#003B36" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Product Management</Text>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
+      
+      <View style={styles.searchContainer}>
+        <SearchBar
+          placeholder="Search products..."
+          onSearchResults={(results) => {
+            const searchResults = results.filter(product => product.status === activeTab);
+            setFilteredProducts(searchResults);
+          }}
+          onSearchStart={handleSearchStart}
+          onSearchEnd={handleSearchEnd}
+          onClearSearch={handleClearSearch}
+          productType="normal"
+        />
+      </View>
+      
+      {isSearching && (
+        <View style={styles.searchingIndicator}>
+          <ActivityIndicator size="small" color="#00A86B" />
+          <Text style={styles.searchingText}>Searching...</Text>
+        </View>
+      )}
+
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
@@ -169,13 +250,13 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
           <Text style={styles.statLabel}>Pending</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{products.length}</Text>
+          <Text style={styles.statNumber}>{filteredProducts.length}</Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
       </View>
 
       <FlatList
-        data={products}
+        data={filteredProducts}
         renderItem={({ item }) => (
           <AdminProductCard
             product={item}
@@ -197,14 +278,28 @@ const AdminProductFeed: React.FC<AdminProductFeedProps> = ({
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              No {activeTab} products found
-            </Text>
+            {isSearching ? (
+              <>
+                <ActivityIndicator size="large" color="#00A86B" />
+                <Text style={styles.emptyText}>Searching products...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyText}>
+                  No {activeTab} products found
+                </Text>
+                {searchTerm && (
+                  <Text style={styles.emptySubText}>
+                    No products match "{searchTerm}"
+                  </Text>
+                )}
+              </>
+            )}
           </View>
         }
-        contentContainerStyle={products.length === 0 ? styles.emptyListContent : undefined}
+        contentContainerStyle={filteredProducts.length === 0 ? styles.emptyListContent : styles.listContent}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -212,6 +307,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  // Custom Header Styles
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaeaea',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#003B36',
+  },
+  headerRightPlaceholder: {
+    width: 40, // Balance the layout
+  },
+  searchContainer: {
+    padding: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+  },
+  searchingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    backgroundColor: '#f0f9f0',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  searchingText: {
+    marginLeft: 8,
+    color: '#00A86B',
+    fontSize: 12,
   },
   centerContainer: {
     flex: 1,
@@ -276,6 +413,11 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
+  listContent: {
+    padding: 16,
+    paddingTop: 0,
+    paddingBottom: 20,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -287,6 +429,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#666',
     marginBottom: 8,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
   emptyListContent: {
     flexGrow: 1,

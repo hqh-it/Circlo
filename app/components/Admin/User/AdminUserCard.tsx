@@ -1,4 +1,3 @@
-// components/Admin/User/AdminUserCard.tsx
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -24,6 +23,7 @@ interface User {
   isSuspended?: boolean;
   suspendReason?: string;
   suspendedUntil?: any;
+  strustPoint?: number;
 }
 
 interface AdminUserCardProps {
@@ -39,6 +39,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
   const isBanned = user.isBanned === true;
   const isSuspended = user.isSuspended === true;
   const isAdmin = user.role === 'admin';
+  const strustPoint = user.strustPoint || 100;
 
   const handleViewProfile = () => {
     router.push({
@@ -89,7 +90,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       }
       
       Alert.alert('Success', duration === 0 ? 'Warning sent successfully' : 'User deactivated successfully');
-      onUserUpdate(); // This should trigger refresh in AdminUserList
+      onUserUpdate();
     } catch (error) {
       Alert.alert('Error', 'Failed to perform action');
     } finally {
@@ -105,7 +106,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       if (result.success) {
         await sendSuspensionNotification(user.id, '', 0, 'unsuspend');
         Alert.alert('Success', result.message);
-        onUserUpdate(); // Refresh the list
+        onUserUpdate();
       } else {
         Alert.alert('Error', result.error);
       }
@@ -143,7 +144,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       if (result.success) {
         await sendSuspensionNotification(user.id, "Manual ban by administrator", -1, 'ban');
         Alert.alert('Success', result.message);
-        onUserUpdate(); // Refresh the list
+        onUserUpdate();
       } else {
         Alert.alert('Error', result.error);
       }
@@ -176,7 +177,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
       if (result.success) {
         await sendSuspensionNotification(user.id, '', 0, 'unban');
         Alert.alert('Success', result.message);
-        onUserUpdate(); // Refresh the list
+        onUserUpdate();
       } else {
         Alert.alert('Error', result.error);
       }
@@ -261,6 +262,15 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, onUserUpdate }) => 
             <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
             <Text style={styles.statusText}>{getStatusText()}</Text>
             <Text style={styles.roleText}> • {getRoleText()}</Text>
+          </View>
+          <View style={styles.strustPointContainer}>
+            <Image 
+              source={require("../../../assets/icons/strustpoint.png")} 
+              style={styles.strustPointIcon}
+            />
+            <Text style={styles.strustPointLabel}>
+              Strust Point: {strustPoint}
+            </Text>
           </View>
           {isSuspended && getSuspensionInfo() && (
             <Text style={styles.suspensionInfo}>
@@ -405,7 +415,7 @@ const styles = StyleSheet.create({
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   statusDot: {
     width: 8,
@@ -421,6 +431,22 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: 12,
     color: '#666',
+  },
+  strustPointContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  strustPointIcon: {
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: '#D4A017',
+  },
+  strustPointLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#D4A017',
   },
   suspensionInfo: {
     fontSize: 11,
