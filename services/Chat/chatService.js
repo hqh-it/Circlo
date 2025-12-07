@@ -12,8 +12,9 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
-  where
+  where,
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { uploadChatImage } from '../cloudinaryService';
@@ -101,6 +102,57 @@ export const chatService = {
 
     } catch (error) {
       console.error('Error creating channel:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  createAIChannel: async (channelId, userId) => {
+    try {
+      const channelRef = doc(db, 'channels', channelId);
+      const channelSnap = await getDoc(channelRef);
+
+      if (channelSnap.exists()) {
+        return {
+          success: true,
+          channelId: channelId
+        };
+      }
+
+      const channelData = {
+        participants: [userId],
+        participantDetails: {
+          [userId]: {
+            name: 'User',
+            avatar: null
+          }
+        },
+        type: 'ai',
+        productId: null,
+        productInfo: null,
+        lastMessage: '👋 Hello! I am AI assistant of Circlo',
+        lastMessageAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        hiddenForUsers: [],
+        aiConfig: {
+          isActive: true,
+          model: 'gemini-2.0-flash',
+          createdAt: new Date()
+        }
+      };
+
+      await setDoc(channelRef, channelData);
+
+      return {
+        success: true,
+        channelId: channelId
+      };
+
+    } catch (error) {
+      console.error('Error creating AI channel:', error);
       return {
         success: false,
         error: error.message
@@ -612,6 +664,29 @@ export const chatService = {
     } catch (error) {
       console.error('Error getting channel:', error);
       return { success: false, error: error.message };
+    }
+  },
+
+  createChannel: async (channelData) => {
+    try {
+      const docRef = await addDoc(collection(db, 'channels'), {
+        ...channelData,
+        lastMessageAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      return {
+        success: true,
+        channelId: docRef.id
+      };
+
+    } catch (error) {
+      console.error('Error creating channel:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 };

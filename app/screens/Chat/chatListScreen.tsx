@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../services/Auth/AuthContext';
+import { aiChatService } from '../../../services/Chat/aiChatService';
 import { auctionChatService } from '../../../services/Chat/auctionChatService';
 import { chatService } from '../../../services/Chat/chatService';
 import { getProductById, getTimeAgo } from '../../../services/Product/productService';
@@ -146,6 +147,36 @@ const ChatListScreen = () => {
     }
   };
 
+  const loadAIChannel = async (): Promise<ChannelWithOtherUser[]> => {
+    if (!currentUser) return [];
+
+    try {
+      const aiChannelId = await aiChatService.getOrCreateAIChannel(currentUser.uid);
+      const result = await chatService.getChannelById(aiChannelId);
+      
+      if (result.success && result.channel) {
+        const channel = result.channel as any;
+        
+        return [{
+          ...channel,
+          id: channel.id,
+          otherUser: {
+            uid: 'ai_assistant',
+            name: '🤖 AI Assistant',
+            avatar: require('../../assets/icons/AI.gif')
+          },
+          lastMessage: 'How can I help you today?',
+          unreadCount: 0,
+          type: 'ai'
+        }];
+      }
+    } catch (error) {
+      console.error('Error loading AI channel:', error);
+    }
+    
+    return [];
+  };
+
   const loadRegularChannels = async () => {
     if (!currentUser) return [];
 
@@ -157,6 +188,10 @@ const ChatListScreen = () => {
         
         for (const channel of result.channels) {
           try {
+            if (aiChatService.isAIChannel(channel.id)) {
+              continue;
+            }
+
             const otherUserId = channel.participants.find((id: string) => id !== currentUser.uid);
             
             if (otherUserId) {
@@ -290,12 +325,13 @@ const ChatListScreen = () => {
     
     setLoading(true);
     
-    const [regularChannelsData, auctionChannelsData] = await Promise.all([
+    const [aiChannelData, regularChannelsData, auctionChannelsData] = await Promise.all([
+      loadAIChannel(),
       loadRegularChannels(),
       loadAuctionChannels()
     ]);
     
-    setRegularChannels(regularChannelsData);
+    setRegularChannels([...aiChannelData, ...regularChannelsData]);
     setAuctionChannels(auctionChannelsData);
     
     setLoading(false);
@@ -317,7 +353,18 @@ const ChatListScreen = () => {
     loadAllChannels();
   };
 
+  const handleAIChannelPress = () => {
+    router.push({
+      pathname: '../../screens/Chat/AIChatScreen'
+    });
+  };
+
   const handleRegularChannelPress = (channel: ChannelWithOtherUser) => {
+    if (channel.type === 'ai') {
+      handleAIChannelPress();
+      return;
+    }
+    
     router.push({
       pathname: '../../screens/Chat/chatScreen',
       params: {
@@ -356,6 +403,46 @@ const ChatListScreen = () => {
   const renderRegularChannelItem = ({ item }: { item: ChannelWithOtherUser }) => {
     const lastMessageTime = item.lastMessageAt ? getTimeAgo(item.lastMessageAt) : 'No messages';
     const hasUnread = item.unreadCount > 0;
+    const isAI = item.type === 'ai';
+    
+    if (isAI) {
+      return (
+        <TouchableOpacity 
+          style={[styles.channelItem, styles.aiChannelItem]}
+          onPress={handleAIChannelPress}
+        >
+          <View style={styles.chatContent}>
+            <View style={styles.avatarContainer}>
+              <Image 
+                source={require('../../assets/icons/AI.gif')}
+                style={styles.aiAvatar} 
+              />
+            </View>
+            
+            <View style={styles.channelInfo}>
+              <View style={styles.channelHeader}>
+                <View style={styles.nameContainer}>
+                  <Text style={[styles.userName, styles.aiUserName]} numberOfLines={1}>
+                    🤖 AI Assistant
+                  </Text>
+                </View>
+                <Text style={styles.timeText}>
+                  {lastMessageTime}
+                </Text>
+              </View>
+              
+              <Text style={[styles.lastMessage, styles.aiLastMessage]} numberOfLines={2}>
+                {item.lastMessage || 'Ask me anything about products!'}
+              </Text>
+              
+              <View style={styles.aiBadge}>
+                <Text style={styles.aiBadgeText}>AI-Powered</Text>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
     
     return (
       <TouchableOpacity 
@@ -637,6 +724,11 @@ const styles = StyleSheet.create({
     elevation: 6,
     overflow: 'hidden',
   },
+  aiChannelItem: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+    backgroundColor: '#F0F9FF',
+  },
   auctionChannelItem: {
     borderLeftWidth: 4,
     borderLeftColor: '#FF9500',
@@ -676,6 +768,12 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: '#F0F0F0',
+  },
+  aiAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E3F2FD',
   },
   auctionIcon: {
     width: 60,
@@ -721,6 +819,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
   },
+  aiUserName: {
+    color: '#2196F3',
+  },
   unreadUserName: {
     color: '#000000',
     fontWeight: '700',
@@ -739,9 +840,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 8,
   },
+  aiLastMessage: {
+    color: '#2196F3',
+    fontWeight: '500',
+  },
   unreadLastMessage: {
     color: '#000000',
     fontWeight: '500',
+  },
+  aiBadge: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  aiBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   auctionStats: {
     flexDirection: 'row',
