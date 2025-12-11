@@ -19,6 +19,7 @@ interface SearchBarProps {
   onClearSearch?: () => void;
   autoFocus?: boolean;
   productType: 'normal' | 'auction';
+  context?: 'public' | 'profile';
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({
@@ -31,6 +32,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onClearSearch,
   autoFocus = false,
   productType,
+  context = 'public',
 }) => {
   const [searchText, setSearchText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -67,7 +69,11 @@ const SearchBar: React.FC<SearchBarProps> = ({
         result = await searchProducts(searchTerm);
       } else {
         const { searchAuctionProducts } = await import('../../services/Auction/auctionService');
-        result = await searchAuctionProducts(searchTerm);
+        const filters: any = {};
+        if (context === 'public') {
+          filters.auctionStatus = 'active';
+        }
+        result = await searchAuctionProducts(searchTerm, filters);
       }
       
       if (result.success) {
@@ -85,7 +91,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
         }
       }
     } catch (error) {
-      console.error('Search error:', error);
       if (onSearchResults) {
         onSearchResults([]);
       }

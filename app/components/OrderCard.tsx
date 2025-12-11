@@ -14,6 +14,7 @@ import { chatService } from '../../services/Chat/chatService';
 import { DeliveryService } from '../../services/Delivery/deliveryService';
 import { acceptOrderWithPayment, cancelOrder, confirmReceipt, updateOrderStatus } from '../../services/Order/orderService';
 import { formatPrice } from '../../services/Product/productService';
+import { loadUserData } from '../../services/User/userService';
 import AcceptOrderModal from '../components/AcceptOrderModal';
 
 interface ProductSnapshot {
@@ -71,6 +72,13 @@ interface Order {
   updatedAt: any;
 }
 
+interface UserInfo {
+  uid: string;
+  fullName: string;
+  avatarURL?: string;
+  email?: string;
+}
+
 interface OrderCardProps {
   order: Order;
   onOrderUpdate?: () => void;
@@ -84,12 +92,56 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [calculatedShippingFee, setCalculatedShippingFee] = useState(order.shippingFee);
+  const [otherUserInfo, setOtherUserInfo] = useState<UserInfo | null>(null);
+  const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
   useEffect(() => {
     if (order.orderType === 'auction' && order.sellerAddress && order.buyerAddress) {
       calculateShippingFee();
     }
   }, [order]);
+
+  useEffect(() => {
+    const loadOtherUserInfo = async () => {
+      if (!user || !order.buyerId || !order.sellerId) return;
+      
+      setLoadingUserInfo(true);
+      try {
+        const isBuyer = order.buyerId === user.uid;
+        const isSeller = order.sellerId === user.uid;
+        
+        let targetUserId = '';
+        let targetUserType = '';
+        
+        if (isBuyer) {
+          targetUserId = order.sellerId;
+          targetUserType = 'seller';
+        } else if (isSeller) {
+          targetUserId = order.buyerId;
+          targetUserType = 'buyer';
+        } else {
+          setLoadingUserInfo(false);
+          return;
+        }
+        
+        const userData = await loadUserData({ uid: targetUserId });
+        
+        if (userData) {
+          setOtherUserInfo({
+            uid: targetUserId,
+            fullName: userData.fullName || (targetUserType === 'seller' ? 'Seller' : 'Buyer'),
+            avatarURL: userData.avatarURL,
+            email: userData.email
+          });
+        }
+      } catch (error) {
+      } finally {
+        setLoadingUserInfo(false);
+      }
+    };
+
+    loadOtherUserInfo();
+  }, [user, order.buyerId, order.sellerId]);
 
   const calculateShippingFee = () => {
     if (!order.sellerAddress || !order.buyerAddress) return;
@@ -103,9 +155,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
       if (shippingResult.success) {
         setCalculatedShippingFee(shippingResult.shippingFee);
       }
-    } catch (error) {
-      console.error('Error calculating shipping fee:', error);
-    }
+    } catch (error) {}
   };
 
   if (!user) return null;
@@ -140,6 +190,15 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
     }
   };
 
+  const handleAvatarPress = (userId: string) => {
+    router.push({
+      pathname: '../../screens/Profile/PublicProfile',
+      params: {
+        userId: userId
+      }
+    });
+  };
+
   const handleAction = async (action: string) => {
     setLoading(true);
     try {
@@ -172,7 +231,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
         Alert.alert('Error', result.error || 'Action failed');
       }
     } catch (error) {
-      console.error('Error performing action:', error);
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setLoading(false);
@@ -197,7 +255,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
         Alert.alert('Error', result.error || 'Action failed');
       }
     } catch (error) {
-      console.error('Error accepting order with payment:', error);
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setLoading(false);
@@ -205,48 +262,75 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   };
 
   const handleContact = async () => {
-    if (!user) return;
+    if (!user) {
+      Alert.alert('Error', 'Please login first');
+      return;
+    }
 
     setContactLoading(true);
     try {
       const targetUserId = isBuyer ? order.sellerId : order.buyerId;
       
+      if (isAuctionOrder) {
+        const isWinner = isBuyer && order.winnerInfo && user.uid === order.winnerInfo.uid;
+        const isAuctionSeller = isSeller;
+        
+        if (isBuyer && !isWinner) {
+          Alert.alert('Cannot Contact', 'Only the auction winner can contact the seller for this order');
+          setContactLoading(false);
+          return;
+        }
+      }
+
+      const productInfo = {
+        id: order.productId,
+        title: order.productSnapshot.title,
+        price: order.productSnapshot.price,
+        images: order.productSnapshot.images,
+        sellerId: order.sellerId,
+        productType: isAuctionOrder ? 'auction' : 'normal',
+        ...(isAuctionOrder && order.auctionId && { 
+          auctionId: order.auctionId,
+          auctionProductId: order.auctionId 
+        })
+      };
+
+      const targetUserName = isBuyer ? "Seller" : (order.winnerInfo?.displayName || "Buyer");
+      const targetUserAvatar = isBuyer ? "" : (order.winnerInfo?.avatarURL || "");
+      
       const createData = {
         participants: [user.uid, targetUserId],
-        productId: order.productId,
-        productInfo: {
-          id: order.productId,
-          title: order.productSnapshot.title,
-          price: order.productSnapshot.price,
-          images: order.productSnapshot.images,
-          sellerId: order.sellerId
+        participantDetails: {
+          [user.uid]: {
+            name: user.displayName || 'You',
+            avatar: user.photoURL || ''
+          },
+          [targetUserId]: {
+            name: targetUserName,
+            avatar: targetUserAvatar
+          }
         },
-        type: 'direct'
+        productId: order.productId,
+        productInfo: productInfo,
+        type: 'direct' as const,
+        isAuction: isAuctionOrder
       };
 
       const result = await chatService.createOrGetChannel(createData);
       
       if (result.success) {
-        const productInfo = {
-          id: order.productId,
-          title: order.productSnapshot.title,
-          price: order.productSnapshot.price,
-          images: order.productSnapshot.images,
-          sellerId: order.sellerId
-        };
-
         router.push({
           pathname: '/screens/Chat/chatScreen',
           params: {
             channelId: result.channelId,
-            productData: JSON.stringify(productInfo)
+            productData: JSON.stringify(productInfo),
+            isAuctionOrder: String(isAuctionOrder)
           }
         });
       } else {
         Alert.alert('Error', 'Cannot create chat room');
       }
     } catch (error) {
-      console.error('Error creating chat room:', error);
       Alert.alert('Error', 'Cannot start chat');
     } finally {
       setContactLoading(false);
@@ -266,6 +350,49 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   const formatAccountNumber = (accountNumber: string) => {
     if (accountNumber.length <= 4) return accountNumber;
     return `****${accountNumber.slice(-4)}`;
+  };
+
+  const renderUserInfo = () => {
+    if (!isBuyer && !isSeller) return null;
+    
+    if (loadingUserInfo) {
+      return (
+        <View style={styles.userInfoLoading}>
+          <ActivityIndicator size="small" color="#00A86B" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+
+    if (!otherUserInfo) return null;
+
+    const userType = isBuyer ? 'Seller' : 'Customer';
+    
+    return (
+      <View style={styles.userInfoSection}>
+        <TouchableOpacity 
+          style={styles.userInfoContainer}
+          onPress={() => handleAvatarPress(otherUserInfo.uid)}
+        >
+          <Text style={styles.userTypeLabel}>{userType}:</Text>
+          <View style={styles.avatarContainer}>
+            {otherUserInfo?.avatarURL ? (
+              <Image 
+                source={{ uri: otherUserInfo.avatarURL }} 
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>
+                  {otherUserInfo?.fullName?.charAt(0)?.toUpperCase() || userType.charAt(0)}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.userName}>{otherUserInfo?.fullName || userType}</Text>
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   const renderPaymentInfo = () => {
@@ -319,10 +446,15 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
   const renderWinnerInfo = () => {
     if (!isAuctionOrder || !order.winnerInfo) return null;
 
+    if (!isSeller) return null;
+
     return (
       <View style={styles.winnerSection}>
         <Text style={styles.winnerTitle}>🏆 Auction Winner</Text>
-        <View style={styles.winnerInfoContainer}>
+        <TouchableOpacity 
+          style={styles.winnerInfoContainer}
+          onPress={() => handleAvatarPress(order.winnerInfo!.uid)}
+        >
           {order.winnerInfo.avatarURL && (
             <Image
               source={{ uri: order.winnerInfo.avatarURL }}
@@ -333,7 +465,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
             <Text style={styles.winnerName}>{order.winnerInfo.displayName}</Text>
             <Text style={styles.winnerId}>User ID: {order.winnerInfo.uid.slice(-8)}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -379,7 +511,9 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
               {contactLoading ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={styles.actionButtonText}>Contact Seller</Text>
+                <Text style={styles.actionButtonText}>
+                  {isAuctionOrder ? 'Contact Seller' : 'Contact Seller'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -387,24 +521,19 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
       
       case 'completed':
         return (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.reviewButton]}
-            >
-              <Text style={styles.actionButtonText}>Leave Review</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.contactButton]}
-              onPress={handleContact}
-              disabled={contactLoading}
-            >
-              {contactLoading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text style={styles.actionButtonText}>Contact Seller</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.contactButton]}
+            onPress={handleContact}
+            disabled={contactLoading}
+          >
+            {contactLoading ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.actionButtonText}>
+                {isAuctionOrder ? 'Contact Seller' : 'Contact Seller'}
+              </Text>
+            )}
+          </TouchableOpacity>
         );
       
       default:
@@ -459,7 +588,9 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
               {contactLoading ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={styles.actionButtonText}>Contact Buyer</Text>
+                <Text style={styles.actionButtonText}>
+                  {isAuctionOrder ? 'Contact Buyer' : 'Contact Buyer'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -506,21 +637,25 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onOrderUpdate }) => {
       {renderWinnerInfo()}
 
       <View style={styles.productSection}>
-        <Image
-          source={{ uri: order.productSnapshot.images[0] }}
-          style={styles.productImage}
-        />
-        <View style={styles.productInfo}>
-          <Text style={styles.productTitle} numberOfLines={2}>
-            {order.productSnapshot.title}
-          </Text>
-          <Text style={styles.productPrice}>
-            {formatPrice(order.totalAmount)}
-            {isAuctionOrder && <Text style={styles.auctionPriceNote}> (Winning Bid)</Text>}
-          </Text>
-          <Text style={styles.productCondition}>
-            Condition: {order.productSnapshot.condition}
-          </Text>
+        {renderUserInfo()}
+        
+        <View style={styles.productContent}>
+          <Image
+            source={{ uri: order.productSnapshot.images[0] }}
+            style={styles.productImage}
+          />
+          <View style={styles.productInfo}>
+            <Text style={styles.productTitle} numberOfLines={2}>
+              {order.productSnapshot.title}
+            </Text>
+            <Text style={styles.productPrice}>
+              {formatPrice(order.totalAmount)}
+              {isAuctionOrder && <Text style={styles.auctionPriceNote}> (Winning Bid)</Text>}
+            </Text>
+            <Text style={styles.productCondition}>
+              Condition: {order.productSnapshot.condition}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -625,6 +760,89 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
+  userInfoLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#666',
+  },
+  userInfoSection: {
+    marginBottom: 12,
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userTypeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginRight: 6,
+  },
+  avatarContainer: {
+    marginRight: 8,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#00A86B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  productSection: {
+    marginBottom: 16,
+  },
+  productContent: {
+    flexDirection: 'row',
+  },
+  productImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  productInfo: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  productTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00A86B',
+    marginBottom: 4,
+  },
+  auctionPriceNote: {
+    fontSize: 12,
+    color: '#FF6B35',
+    fontStyle: 'italic',
+  },
+  productCondition: {
+    fontSize: 14,
+    color: '#666',
+  },
   winnerSection: {
     backgroundColor: '#fffdf0',
     padding: 12,
@@ -660,41 +878,6 @@ const styles = StyleSheet.create({
   },
   winnerId: {
     fontSize: 12,
-    color: '#666',
-  },
-  productSection: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  productImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  productInfo: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  productTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#00A86B',
-    marginBottom: 4,
-  },
-  auctionPriceNote: {
-    fontSize: 12,
-    color: '#FF6B35',
-    fontStyle: 'italic',
-  },
-  productCondition: {
-    fontSize: 14,
     color: '#666',
   },
   detailsSection: {
@@ -838,9 +1021,6 @@ const styles = StyleSheet.create({
   },
   contactButton: {
     backgroundColor: '#5856D6',
-  },
-  reviewButton: {
-    backgroundColor: '#FF2D55',
   },
   confirmButton: {
     backgroundColor: '#00A86B',

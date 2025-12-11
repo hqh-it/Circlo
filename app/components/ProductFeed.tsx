@@ -4,9 +4,11 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   RefreshControl,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { db } from '../../firebaseConfig';
@@ -95,66 +97,93 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
     }
   }, [productType, mode, userId, searchTerm, filters, status]);
 
-  const loadAuctionProducts = useCallback(async (isLoadMore = false) => {
-    try {
-      let result;
-      
-      if (mode === 'user' && userId) {
-        result = await getAuctionProductsByUser(userId);
-      } else if (searchTerm) {
-        result = await searchAuctionProducts(searchTerm, filters);
-      } else if (filters) {
-        result = await getAuctionProductsByFilter(filters);
-      } else {
-        result = await getAuctionProducts({ status: 'active' });
-      }
-      
-      if (result.success && result.products) {
-        const auctionProducts = result.products.map(auction => {
-          const auctionData = auction.auctionInfo || {};
-          
-          return {
-            id: auction.id,
-            type: 'auction' as const,
-            images: auction.images || [],
-            title: auction.title || 'No Title',
-            price: auction.startPrice || auction.currentBid || 0,
-            address: auction.address || {},
-            likeCount: auction.likeCount || 0,
-            viewCount: auction.viewCount || 0,
-            sellerAvatar: auction.sellerAvatar,
-            sellerName: auction.sellerName || 'Unknown Seller',
-            condition: auction.condition || 'used',
-            createdAt: auction.createdAt,
-            sellerId: auction.sellerId,
-            status: auction.status,
-            auctionInfo: {
-              currentBid: auction.currentBid || auction.startPrice || 0,
-              startPrice: auction.startPrice || 0,
-              startTime: auctionData.startTime,
-              endTime: auctionData.endTime,
-              bidCount: auctionData.bidCount || 0,
-              status: auctionData.status || 'active',
-              bidIncrement: auctionData.bidIncrement || 0,
-              buyNowPrice: auctionData.buyNowPrice,
-              highestBidder: auctionData.highestBidder
-            }
-          };
-        });
+  const shouldDisplayAuction = (product: Product): boolean => {
+    if (status === 'pending') {
+      return product.status === 'pending';
+    }
+    
+    if (product.status !== 'active') {
+      return false;
+    }
+    
+    if (mode === 'user') {
+      return true;
+    }
+    
+    return product.auctionInfo?.status === 'active';
+  };
 
-        const filteredProducts = auctionProducts.filter(product => 
-          status === 'pending' ? product.status === 'pending' : product.status === 'active'
-        );
+const loadAuctionProducts = useCallback(async (isLoadMore = false) => {
+  try {
+    let result;
+    
+    console.log('loadAuctionProducts - mode:', mode, 'status:', status);
+    
+    if (mode === 'user' && userId) {
+      result = await getAuctionProductsByUser(userId);
+    } else if (searchTerm) {
+      result = await searchAuctionProducts(searchTerm, filters);
+    } else if (filters) {
+      result = await getAuctionProductsByFilter(filters);
+    } else {
+      result = await getAuctionProducts({ 
+        status: 'active'
+      });
+    }
+    
+    console.log('Result from getAuctionProducts:', {
+      success: result.success,
+      count: result.products?.length || 0
+    });
+    
+    if (result.success && result.products) {
+      console.log('Processing', result.products.length, 'auction products');
+      
+      const auctionProducts = result.products.map(auction => {
+        const auctionData = auction.auctionInfo || {};
         
-        return filteredProducts;
-      } else {
-        return [];
-      }
-    } catch (error) {
-      console.error('Error loading auction products:', error);
+        console.log('Mapping product:', auction.id, 'auctionStatus:', auctionData.status);
+        
+        if (mode !== 'user' && auctionData.status !== 'active') {
+          return null; 
+        }
+        
+        return {
+          id: auction.id,
+          type: 'auction' as const,
+          images: auction.images || [],
+          title: auction.title || 'No Title',
+          price: auction.startPrice || auction.currentBid || 0,
+          address: auction.address || {},
+          likeCount: auction.likeCount || 0,
+          viewCount: auction.viewCount || 0,
+          sellerAvatar: auction.sellerAvatar,
+          sellerName: auction.sellerName || 'Unknown Seller',
+          condition: auction.condition || 'used',
+          createdAt: auction.createdAt,
+          sellerId: auction.sellerId,
+          status: auction.status,
+          auctionInfo: {
+            currentBid: auction.currentBid || auction.startPrice || 0,
+            startPrice: auction.startPrice || 0,
+            startTime: auctionData.startTime,
+            endTime: auctionData.endTime,
+            bidCount: auctionData.bidCount || 0,
+            status: auctionData.status || 'active',
+            bidIncrement: auctionData.bidIncrement || 0,
+            buyNowPrice: auctionData.buyNowPrice,
+            highestBidder: auctionData.highestBidder
+          }
+        };
+      }).filter(product => product !== null); 
+      return auctionProducts;
+    } else {
       return [];
     }
-  }, [mode, userId, searchTerm, filters, status]);
+  } catch (error) {
+    return [];
+  }
+}, [mode, userId, searchTerm, filters, status]);
 
   const loadNormalProducts = useCallback(async (isLoadMore = false) => {
     try {
@@ -172,9 +201,13 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
             type: 'normal' as const
           }));
 
-          const filteredProducts = productsWithType.filter(product => 
-            status === 'pending' ? product.status === 'pending' : product.status === 'active'
-          );
+          const filteredProducts = productsWithType.filter(product => {
+            if (status === 'pending') {
+              return product.status === 'pending';
+            } else {
+              return product.status === 'active';
+            }
+          });
 
           return filteredProducts;
         }
@@ -227,10 +260,9 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
 
       return newProducts;
     } catch (error) {
-      console.error('Error loading normal products:', error);
       throw error;
     }
-  }, [mode, userId, lastVisible, searchTerm, filters, status]);
+  }, [mode, userId, lastVisible, searchTerm, filters, status, isOwnProfile]);
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     if (isExternalData) {
@@ -260,23 +292,30 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
         setHasMore(false);
       }
 
+      const finalProducts = productsData.filter(product => {
+        if (status === 'pending') {
+          return product.status === 'pending';
+        } else {
+          return product.status === 'active';
+        }
+      });
+
       if (isRefresh) {
-        setProducts(productsData);
+        setProducts(finalProducts);
       } else {
-        setProducts(productsData);
+        setProducts(finalProducts);
       }
 
     } catch (error) {
-      console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [mode, userId, isExternalData, productType, loadAuctionProducts, loadNormalProducts]);
+  }, [mode, userId, isExternalData, productType, loadAuctionProducts, loadNormalProducts, status]);
 
   const loadMore = async () => {
-    if (!hasMore || loading || isExternalData || productType === 'auction' || searchTerm || filters) {
+    if (!hasMore || loading || isExternalData || productType === 'auction' || searchTerm || filters || status === 'pending') {
       return;
     }
 
@@ -287,7 +326,6 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
       
       setProducts(prev => [...prev, ...newProducts]);
     } catch (error) {
-      console.error('Error loading more products:', error);
     } finally {
       setLoading(false);
     }
@@ -307,24 +345,56 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
     }
   };
 
+  const handleManualRefresh = () => {
+    if (!isExternalData) {
+      loadProducts(true);
+    }
+  };
+
   if (loading && products.length === 0) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00A86B" />
-        <Text>Loading {productType === 'auction' ? 'auctions' : 'products'}...</Text>
+        <Text style={styles.loadingText}>
+          Loading {status === 'pending' ? 'pending ' : ''}
+          {productType === 'auction' ? 'auctions' : 
+           productType === 'normal' ? 'products' : 'items'}...
+        </Text>
       </View>
     );
   }
 
   if (products.length === 0) {
     return (
-      <View style={styles.centerContainer}>
-        <Text>No {productType === 'auction' ? 'auctions' : 'products'} found</Text>
-        <Text style={styles.emptyText}>
-          {mode === 'user' 
-            ? `This user has no ${productType === 'auction' ? 'auctions' : 'products'} yet.` 
-            : `No ${productType === 'auction' ? 'auctions' : 'products'} available.`}
+      <View style={styles.emptyContainer}>
+        <Image 
+          source={require('../assets/icons/noItem.gif')}
+          style={styles.emptyImage}
+          resizeMode="contain"
+        />
+        <Text style={styles.emptyTitle}>
+          {status === 'pending' 
+            ? 'No pending items'
+            : mode === 'user' 
+              ? `No ${productType === 'auction' ? 'auctions' : 'products'} yet` 
+              : `No ${productType === 'auction' ? 'auctions' : 'products'} available`}
         </Text>
+        <Text style={styles.emptySubtitle}>
+          {status === 'pending'
+            ? 'All items have been reviewed or no items are waiting for approval.'
+            : mode === 'user' 
+              ? `This user hasn't posted any ${productType === 'auction' ? 'auctions' : 'products'} yet.` 
+              : `There are currently no ${productType === 'auction' ? 'auctions' : 'products'} available.`}
+        </Text>
+        {!isExternalData && (
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleManualRefresh}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.refreshButtonText}>⟳ Refresh</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -349,13 +419,14 @@ const ProductFeed: React.FC<ProductFeedProps> = ({
               refreshing={refreshing}
               onRefresh={handleRefresh}
               colors={['#00A86B']}
+              tintColor="#00A86B"
             />
           ) : undefined
         }
-        onEndReached={isExternalData || productType === 'auction' || searchTerm || filters ? undefined : loadMore}
+        onEndReached={isExternalData || productType === 'auction' || searchTerm || filters || status === 'pending' ? undefined : loadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
-          hasMore && !isExternalData && productType !== 'auction' && !searchTerm && !filters ? (
+          hasMore && !isExternalData && productType !== 'auction' && !searchTerm && !filters && status !== 'pending' ? (
             <View style={styles.footer}>
               <ActivityIndicator size="small" color="#00A86B" />
               <Text style={styles.footerText}>Loading more products...</Text>
@@ -372,25 +443,78 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  centerContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#f8f9fa',
   },
-  emptyText: {
-    marginTop: 8,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#00A86B',
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    backgroundColor: '#f8f9fa',
+  },
+  emptyImage: {
+    width: 180,
+    height: 180,
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  refreshButton: {
+    backgroundColor: '#00A86B',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#00A86B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    minWidth: 140,
+  },
+  refreshButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   footer: {
-    padding: 16,
+    padding: 24,
     alignItems: 'center',
+    backgroundColor: '#f8f9fa',
   },
   footerText: {
-    marginTop: 8,
+    marginTop: 12,
     color: '#666',
     fontSize: 14,
+    fontWeight: '500',
   },
 });
 

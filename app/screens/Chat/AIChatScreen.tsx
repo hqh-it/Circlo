@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -86,6 +87,8 @@ const AIChatScreen = () => {
     avatarURL?: string;
   } | null>(null);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set(['1']));
+  const [showQuickActions, setShowQuickActions] = useState(true);
+  const [quickActionsHeight] = useState(new Animated.Value(0));
   
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
@@ -170,6 +173,22 @@ const AIChatScreen = () => {
       hideSubscription.remove();
     };
   }, [messages.length]);
+
+  useEffect(() => {
+    if (productData && showQuickActions) {
+      Animated.timing(quickActionsHeight, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(quickActionsHeight, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [showQuickActions, productData]);
 
   const analyzeProduct = async (product: ProductInfo) => {
     if (!currentUser || aiThinking) return;
@@ -279,6 +298,10 @@ const AIChatScreen = () => {
     });
   };
 
+  const toggleQuickActions = () => {
+    setShowQuickActions(!showQuickActions);
+  };
+
   const handleSendMessage = async () => {
     if ((!inputText.trim() && selectedImages.length === 0) || !currentUser || sending || aiThinking) return;
 
@@ -291,20 +314,18 @@ const AIChatScreen = () => {
     
     try {
       if (selectedImages.length > 0) {
-        // Chỉ gửi một tin nhắn ảnh với caption, không gửi thêm tin nhắn text riêng
         const imageMsg: Message = {
           id: generateUniqueId(),
           text: userMessage || '📷 Image',
           sender: 'user',
           timestamp: new Date(),
-          imageUrl: selectedImages[0].uri, // Chỉ lấy ảnh đầu tiên nếu có nhiều ảnh
+          imageUrl: selectedImages[0].uri,
           caption: userMessage || '📷 Image'
         };
         setMessages(prev => [...prev, imageMsg]);
         
         setSelectedImages([]);
       } else {
-        // Gửi tin nhắn văn bản thông thường
         const userMsg: Message = {
           id: generateUniqueId(),
           text: userMessage,
@@ -320,12 +341,10 @@ const AIChatScreen = () => {
       
       if (selectedImages.length > 0) {
         try {
-          // Chuyển ảnh sang base64
           const base64Images = await Promise.all(
             selectedImages.slice(0, 3).map(img => geminiService.base64FromURI(img.uri))
           );
           
-          // Phân tích ảnh với caption hoặc câu hỏi từ người dùng
           aiResponse = await geminiService.analyzeImagesWithQuery(
             base64Images,
             tempInputText || 'Hãy phân tích sản phẩm trong ảnh này'
@@ -387,6 +406,24 @@ const AIChatScreen = () => {
       }
     }, 300);
   };
+
+  const handleQuickAction = (actionText: string) => {
+    if (productData) {
+      setInputText(`${actionText}: ${productData.title}`);
+    } else {
+      setInputText(actionText);
+    }
+    textInputRef.current?.focus();
+  };
+
+  const quickActions = [
+    { id: 1, text: 'Price check', emoji: '💰' },
+    { id: 2, text: 'Authenticity', emoji: '✅' },
+    { id: 3, text: 'Risk check', emoji: '⚠️' },
+    { id: 4, text: 'Value estimate', emoji: '📊' },
+    { id: 5, text: 'Product condition', emoji: '🔍' },
+    { id: 6, text: 'Negotiation tips', emoji: '💬' },
+  ];
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isAI = item.sender === 'ai';
@@ -570,27 +607,17 @@ const AIChatScreen = () => {
     </Modal>
   );
 
-  const quickActions = [
-    { id: 1, text: '💰 Price check', emoji: '💸' },
-    { id: 2, text: '✅ Authenticity', emoji: '🔍' },
-    { id: 3, text: '⚠️ Risk check', emoji: '🚨' },
-    { id: 4, text: '📊 Value estimate', emoji: '📈' },
-  ];
-
-  const handleQuickAction = (action: string) => {
-    if (productData) {
-      setInputText(`${action}: ${productData.title}`);
-    } else {
-      setInputText(action);
-    }
-  };
-
   const handleBackPress = () => {
     Keyboard.dismiss();
     setTimeout(() => {
       router.back();
     }, 100);
   };
+
+  const quickActionsHeightInterpolate = quickActionsHeight.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 150]
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -629,23 +656,49 @@ const AIChatScreen = () => {
             />
           )}
 
-          {productData && !aiThinking && (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.quickActionsContainer}
+          {productData && (
+            <Animated.View 
+              style={[
+                styles.quickActionsSection,
+                { height: quickActionsHeightInterpolate }
+              ]}
             >
-              {quickActions.map(action => (
-                <TouchableOpacity
-                  key={action.id}
-                  style={styles.quickActionButton}
-                  onPress={() => handleQuickAction(action.text)}
+              <View style={styles.quickActionsHeader}>
+                <Text style={styles.quickActionsTitle}>Quick Suggestions</Text>
+                <TouchableOpacity 
+                  onPress={toggleQuickActions}
+                  style={styles.toggleButton}
                 >
-                  <Text style={styles.quickActionEmoji}>{action.emoji}</Text>
-                  <Text style={styles.quickActionText}>{action.text}</Text>
+                  <Text style={styles.toggleButtonText}>
+                    {showQuickActions ? 'Hide' : 'Show'}
+                  </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </View>
+              
+              {showQuickActions && (
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.quickActionsScrollContent}
+                >
+                  {quickActions.map(action => (
+                    <TouchableOpacity
+                      key={action.id}
+                      style={styles.quickActionButton}
+                      onPress={() => handleQuickAction(action.text)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.quickActionEmojiContainer}>
+                        <Text style={styles.quickActionEmoji}>{action.emoji}</Text>
+                      </View>
+                      <Text style={styles.quickActionText} numberOfLines={2}>
+                        {action.text}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </Animated.View>
           )}
           
           <View style={[
@@ -676,8 +729,12 @@ const AIChatScreen = () => {
               }}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No messages yet</Text>
-                  <Text style={styles.emptySubText}>Start a conversation!</Text>
+                  <Image 
+                    source={require('../../assets/icons/AI.gif')}
+                    style={styles.emptyAvatar}
+                  />
+                  <Text style={styles.emptyText}>Chat with AI Assistant</Text>
+                  <Text style={styles.emptySubText}>Ask about products, prices, or upload images for analysis</Text>
                 </View>
               }
             />
@@ -685,7 +742,7 @@ const AIChatScreen = () => {
             {aiThinking && (
               <View style={styles.thinkingContainer}>
                 <View style={styles.thinkingBubble}>
-                  <ActivityIndicator size="small" color="#666" />
+                  <ActivityIndicator size="small" color="#01332fff" />
                   <Text style={styles.thinkingText}>AI is thinking...</Text>
                 </View>
               </View>
@@ -828,37 +885,71 @@ const styles = StyleSheet.create({
     color: "#FFD700",
     marginTop: 2,
   },
-  quickActionsContainer: {
+  quickActionsSection: {
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  quickActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f8f8f8',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8E8E8',
+    backgroundColor: '#FFFFFF',
+  },
+  quickActionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#01332fff',
+  },
+  toggleButton: {
+    backgroundColor: '#f0f8f4',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  toggleButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#01332fff',
+  },
+  quickActionsScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
   },
   quickActionButton: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f8faf9',
+    borderRadius: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    flexDirection: 'row',
+    marginRight: 12,
+    minWidth: 100,
+    maxWidth: 120,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e8f4ec',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  quickActionEmojiContainer: {
+    marginBottom: 6,
   },
   quickActionEmoji: {
-    fontSize: 16,
-    marginRight: 8,
+    fontSize: 24,
   },
   quickActionText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 13,
     fontWeight: '500',
+    color: '#01332fff',
+    textAlign: 'center',
+    lineHeight: 16,
   },
   chatContent: {
     flex: 1,
@@ -890,6 +981,11 @@ const styles = StyleSheet.create({
     borderColor: '#E8E8E8',
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   thinkingText: {
     marginLeft: 8,
@@ -1163,17 +1259,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 100,
+    paddingHorizontal: 20,
+  },
+  emptyAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 20,
+    borderWidth: 3,
+    borderColor: '#01332fff',
   },
   emptyText: {
-    fontSize: 18,
-    color: "#6B7280",
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: "#01332fff",
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptySubText: {
-    fontSize: 14,
+    fontSize: 15,
     color: "#6B7280",
     textAlign: 'center',
+    lineHeight: 22,
   },
   imageViewerOverlay: {
     flex: 1,

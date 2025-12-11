@@ -14,18 +14,21 @@ interface ProductInfo {
   price: number;
   images: string[];
   sellerId: string;
+  productType?: 'regular' | 'auction'; // Thêm trường này để phân biệt
 }
 
 interface ProductHeaderProps {
   product: ProductInfo;
   onPress?: () => void;
   showHideButton?: boolean; 
+  productType?: 'regular' | 'auction'; // Thêm prop này
 }
 
 const ProductHeader: React.FC<ProductHeaderProps> = ({ 
   product, 
   onPress, 
-  showHideButton = false 
+  showHideButton = false,
+  productType = 'regular' // Giá trị mặc định
 }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -50,8 +53,12 @@ const ProductHeader: React.FC<ProductHeaderProps> = ({
         activeOpacity={0.7}
       >
         <View style={styles.hiddenContent}>
-          <Text style={styles.hiddenIcon}>📦</Text>
-          <Text style={styles.hiddenText}>Show Product</Text>
+          <Text style={styles.hiddenIcon}>
+            {productType === 'auction' ? '🏷️' : '📦'}
+          </Text>
+          <Text style={styles.hiddenText}>
+            {productType === 'auction' ? 'Show Auction' : 'Show Product'}
+          </Text>
           <Text style={styles.showButton}>▼</Text>
         </View>
       </TouchableOpacity>
@@ -89,7 +96,7 @@ const ProductHeader: React.FC<ProductHeaderProps> = ({
             {product.price?.toLocaleString() || '0'} VND
           </Text>
           <Text style={styles.productStatus}>
-            💬 Chatting about this product
+            {productType === 'auction' ? '🏷️ Auction in progress' : '💬 Chatting about this product'}
           </Text>
         </View>
 

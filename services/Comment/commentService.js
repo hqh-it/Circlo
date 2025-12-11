@@ -1,14 +1,14 @@
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    query,
-    serverTimestamp,
-    updateDoc,
-    where
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { loadUserProfile } from '../User/userService';
@@ -29,10 +29,8 @@ export const addComment = async (productId, user, text) => {
       throw new Error('Comment text cannot exceed 500 characters');
     }
 
-    // Get user data from userService
     const userData = await loadUserProfile(user);
 
-    // Use fullName and avatarURL from Firestore
     const userName = userData?.fullName || user.displayName || user.email?.split('@')[0] || 'User';
     const userAvatar = userData?.avatarURL || user.photoURL || null;
 
@@ -79,7 +77,6 @@ export const getCommentsByProductId = async (productId) => {
     for (const doc of querySnapshot.docs) {
       const data = doc.data();
       
-      // Get user data for each comment
       const userData = await loadUserProfile({ uid: data.userId });
       
       const comment = {
@@ -96,7 +93,6 @@ export const getCommentsByProductId = async (productId) => {
       comments.push(comment);
     }
 
-    // Sort by creation date (newest first)
     comments.sort((a, b) => b.createdAt - a.createdAt);
 
     return {
@@ -127,7 +123,11 @@ export const deleteComment = async (commentId, userId) => {
 
     const commentData = commentDoc.data();
     
-    if (commentData.userId !== userId) {
+    const userDoc = await getDoc(doc(db, "users", userId));
+    const userData = userDoc.data();
+    const isAdmin = userData?.role === 'admin';
+    
+    if (commentData.userId !== userId && !isAdmin) {
       throw new Error('You can only delete your own comments');
     }
 

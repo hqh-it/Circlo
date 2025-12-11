@@ -14,10 +14,26 @@ import {
 import { db } from '../../firebaseConfig';
 import { uploadToCloudinary, uploadVideoToCloudinary } from '../cloudinaryService';
 
+const convertFirestoreTimestamp = (timestamp) => {
+  if (!timestamp) return new Date();
+  
+  if (timestamp.seconds && timestamp.nanoseconds !== undefined) {
+    return new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
+  }
+  
+  if (timestamp instanceof Date) {
+    return timestamp;
+  }
+  
+  try {
+    return new Date(timestamp);
+  } catch (error) {
+    return new Date();
+  }
+};
+
 export const createAuctionProduct = async (productData, auctionSettings, userId, userData) => {
   try {
-    console.log('Creating auction product with user data:', { userId, userData });
-
     const uploadedImages = [];
     for (const imageUri of productData.images) {
       const uploadResult = await uploadToCloudinary(imageUri, 'auctions');
@@ -60,10 +76,10 @@ export const createAuctionProduct = async (productData, auctionSettings, userId,
         buyNowPrice: auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null,
         bidCount: 0,
         highestBidder: null,
-        status: 'active'
+        status: 'pending'
       },
       
-      status: 'active',
+      status: 'pending',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       viewCount: 0,
@@ -75,11 +91,7 @@ export const createAuctionProduct = async (productData, auctionSettings, userId,
       ]
     };
 
-    console.log('Auction document to save:', auctionDoc);
-
     const docRef = await addDoc(collection(db, 'auction_products'), auctionDoc);
-    
-    console.log('Auction product created successfully with ID:', docRef.id);
     
     return {
       success: true,
@@ -88,7 +100,6 @@ export const createAuctionProduct = async (productData, auctionSettings, userId,
     };
 
   } catch (error) {
-    console.error('Error creating auction product:', error);
     return {
       success: false,
       error: error.message,
@@ -106,6 +117,10 @@ export const getAuctionProducts = async (filters = {}) => {
       queryConstraints.push(where('status', '==', filters.status));
     } else {
       queryConstraints.push(where('status', '==', 'active'));
+    }
+    
+    if (filters.auctionStatus) {
+      queryConstraints.push(where('auctionInfo.status', '==', filters.auctionStatus));
     }
     
     if (filters.category) {
@@ -162,15 +177,39 @@ export const getAuctionProductById = async (productId) => {
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
+      const data = docSnap.data();
+      const now = new Date();
+      const endTime = convertFirestoreTimestamp(data.auctionInfo.endTime);
+      
+      if (endTime < now && data.auctionInfo.status === 'active') {
+        await updateDoc(docRef, {
+          'auctionInfo.status': 'ended',
+          updatedAt: serverTimestamp()
+        });
+        
+        const updatedSnap = await getDoc(docRef);
+        await updateDoc(docRef, {
+          viewCount: (data.viewCount || 0) + 1
+        });
+        
+        return {
+          success: true,
+          product: {
+            id: docSnap.id,
+            ...updatedSnap.data()
+          }
+        };
+      }
+      
       await updateDoc(docRef, {
-        viewCount: (docSnap.data().viewCount || 0) + 1
+        viewCount: (data.viewCount || 0) + 1
       });
       
       return {
         success: true,
         product: {
           id: docSnap.id,
-          ...docSnap.data()
+          ...data
         }
       };
     } else {
@@ -226,6 +265,7 @@ export const updateAuctionProduct = async (productId, productData, auctionSettin
       'auctionInfo.endTime': auctionSettings.endTime,
       'auctionInfo.bidIncrement': parseFloat(auctionSettings.bidIncrement),
       'auctionInfo.buyNowPrice': auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null,
+      'auctionInfo.status': 'active',
       updatedAt: serverTimestamp()
     };
 
@@ -239,7 +279,6 @@ export const updateAuctionProduct = async (productId, productData, auctionSettin
     };
     
   } catch (error) {
-    console.error('Error updating auction product:', error);
     return {
       success: false,
       error: error.message
@@ -257,7 +296,6 @@ export const deleteAuctionProduct = async (productId) => {
     };
     
   } catch (error) {
-    console.error('Error deleting auction product:', error);
     return {
       success: false,
       error: error.message
@@ -314,10 +352,30 @@ export const getAuctionProductsByUser = async (userId) => {
     const products = [];
     
     querySnapshot.forEach((doc) => {
-      products.push({
-        id: doc.id,
-        ...doc.data()
-      });
+      const data = doc.data();
+      const now = new Date();
+      const endTime = convertFirestoreTimestamp(data.auctionInfo.endTime);
+      
+      if (endTime < now && data.auctionInfo.status === 'active') {
+        updateDoc(doc.ref, {
+          'auctionInfo.status': 'ended',
+          updatedAt: serverTimestamp()
+        });
+        
+        products.push({
+          id: doc.id,
+          ...data,
+          auctionInfo: {
+            ...data.auctionInfo,
+            status: 'ended'
+          }
+        });
+      } else {
+        products.push({
+          id: doc.id,
+          ...data
+        });
+      }
     });
     
     return {
@@ -338,16 +396,12 @@ export const getAuctionProductsByUser = async (userId) => {
 
 export const searchAuctionProducts = async (searchTerm, filters = {}) => {
   try {
-    console.log('Searching auction products with term:', searchTerm);
-    
-    // Lấy tất cả sản phẩm đấu giá với bộ lọc cơ bản
     const result = await getAuctionProducts(filters);
     
     if (!result.success) {
       return result;
     }
     
-    // Lọc client-side theo từ khóa tìm kiếm
     const searchResults = result.products.filter(product => {
       const searchableText = (
         product.title?.toLowerCase() + 
@@ -367,7 +421,6 @@ export const searchAuctionProducts = async (searchTerm, filters = {}) => {
     };
     
   } catch (error) {
-    console.error('Error searching auction products:', error);
     return {
       success: false,
       error: error.message,
@@ -379,12 +432,9 @@ export const searchAuctionProducts = async (searchTerm, filters = {}) => {
 
 export const getAuctionProductsByFilter = async (filters = {}) => {
   try {
-    console.log('Getting auction products with filters:', filters);
-    
     let auctionsQuery = collection(db, 'auction_products');
     const queryConstraints = [where('status', '==', 'active')];
     
-    // Áp dụng các bộ lọc tương tự productService
     if (filters.categories && filters.categories.length > 0) {
       queryConstraints.push(where('category', 'in', filters.categories));
     }
@@ -393,7 +443,6 @@ export const getAuctionProductsByFilter = async (filters = {}) => {
       queryConstraints.push(where('condition', 'in', filters.conditions));
     }
     
-    // Lọc theo giá hiện tại (currentBid) thay vì price
     if (filters.minPrice !== undefined && filters.minPrice !== null) {
       queryConstraints.push(where('currentBid', '>=', parseFloat(filters.minPrice)));
     }
@@ -405,7 +454,10 @@ export const getAuctionProductsByFilter = async (filters = {}) => {
       queryConstraints.push(where('address.provinceCode', '==', filters.location));
     }
     
-    // Sắp xếp
+    if (filters.auctionStatus) {
+      queryConstraints.push(where('auctionInfo.status', '==', filters.auctionStatus));
+    }
+    
     if (filters.sort) {
       switch (filters.sort) {
         case 'price_low_high':
@@ -421,8 +473,6 @@ export const getAuctionProductsByFilter = async (filters = {}) => {
       queryConstraints.push(orderBy('createdAt', 'desc'));
     }
     
-    console.log('Auction query constraints:', queryConstraints.length);
-    
     const q = query(auctionsQuery, ...queryConstraints);
     const querySnapshot = await getDocs(q);
     
@@ -435,8 +485,6 @@ export const getAuctionProductsByFilter = async (filters = {}) => {
       });
     });
     
-    console.log(`Found ${products.length} auction products with filters`);
-    
     return {
       success: true,
       products,
@@ -444,7 +492,6 @@ export const getAuctionProductsByFilter = async (filters = {}) => {
     };
     
   } catch (error) {
-    console.error('Error getting auction products with filters:', error);
     return {
       success: false,
       error: error.message,

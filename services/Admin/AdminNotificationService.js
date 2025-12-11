@@ -1,8 +1,8 @@
-// AdminNotificationService.js
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 import { deleteAuctionProduct, updateAuctionProduct } from '../Auction/auctionService';
 import { notificationService } from '../Notification/notificationService';
 import { deleteProduct, getProductById, updateProduct } from '../Product/productService';
-
 export const sendWarningToUser = async (userId, reason = "Account warning from administrator") => {
   try {
     const notificationData = {
@@ -82,7 +82,20 @@ export const approveProduct = async (productId, productType = 'normal') => {
     let result;
     
     if (productType === 'auction') {
-      result = await updateAuctionProduct(productId, { status: 'active' });
+      const auctionDocRef = doc(db, 'auction_products', productId);
+      const auctionDoc = await getDoc(auctionDocRef);
+      
+      if (!auctionDoc.exists()) {
+        return { success: false, error: 'Auction product not found' };
+      }
+
+      await updateDoc(auctionDocRef, {
+        status: 'active',
+        'auctionInfo.status': 'active',
+        updatedAt: new Date()
+      });
+      
+      result = { success: true, message: 'Auction approved successfully' };
     } else {
       result = await updateProduct(productId, { status: 'active' });
     }
@@ -94,7 +107,7 @@ export const approveProduct = async (productId, productType = 'normal') => {
     }
   } catch (error) {
     console.error('Error approving product:', error);
-    return { success: false, error: 'Failed to approve product' };
+    return { success: false, error: 'Failed to approve product: ' + error.message };
   }
 };
 

@@ -63,6 +63,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   
   const isAuction = product.type === 'auction' && product.auctionInfo;
+  const isAuctionEnded = isAuction && product.auctionInfo?.status === 'ended';
 
   const convertFirestoreTimestamp = (timestamp: any): Date => {
     if (!timestamp) return new Date();
@@ -78,7 +79,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
     try {
       return new Date(timestamp);
     } catch (error) {
-      console.error('Error converting timestamp:', error);
       return new Date();
     }
   };
@@ -133,7 +133,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
           }
         }
       } catch (error) {
-        console.error('Error updating countdown:', error);
         setTimeRemaining('Time error');
       }
     };
@@ -246,7 +245,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <TouchableOpacity 
-      style={[styles.container, isAuction && styles.auctionContainer]} 
+      style={[styles.container, isAuction && styles.auctionContainer, isAuctionEnded && styles.endedContainer]} 
       onPress={handleCardPress} 
       activeOpacity={0.9}
     >
@@ -265,17 +264,23 @@ const ProductCard: React.FC<ProductCardProps> = ({
         />
 
         {isAuction && product.auctionInfo && (
-          <View style={styles.countdownSidebar}>
+          <View style={[styles.countdownSidebar, isAuctionEnded && styles.endedCountdown]}>
             <Text style={styles.countdownText}>
               {timeRemaining}
             </Text>
+          </View>
+        )}
+        
+        {isAuctionEnded && (
+          <View style={styles.endedOverlay}>
+            <Text style={styles.endedText}>Auction Ended</Text>
           </View>
         )}
       </View>
 
       <View style={styles.productInfo}>
         <View style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={2}>
+          <Text style={[styles.title, isAuctionEnded && styles.endedTitle]} numberOfLines={2}>
             {product.title}
           </Text>
         </View>
@@ -300,13 +305,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <View style={styles.priceSection}>
           {isAuction && product.auctionInfo ? (
             <View style={styles.auctionPriceSection}>
-              <Text style={styles.startPrice}>
+              <Text style={[styles.startPrice, isAuctionEnded && styles.endedTextColor]}>
                 💰 Start Price: {getDisplayPrice()}
               </Text>
-              <Text style={styles.auctionTime}>
+              <Text style={[styles.auctionTime, isAuctionEnded && styles.endedTextColor]}>
                 ⏰ Start at: {formatAuctionTime(product.auctionInfo.startTime)}
               </Text>
-              <Text style={styles.bidIncrement}>
+              <Text style={[styles.bidIncrement, isAuctionEnded && styles.endedTextColor]}>
                 📈 Min bid: {formatPrice(product.auctionInfo.bidIncrement)} VND
               </Text>
             </View>
@@ -316,13 +321,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </View>
 
         <View style={styles.locationContainer}>
-          <Text style={styles.location}>
+          <Text style={[styles.location, isAuctionEnded && styles.endedTextColor]}>
             📍 {getLocationText()}
           </Text>
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.condition}>
+          <Text style={[styles.condition, isAuctionEnded && styles.endedTextColor]}>
             {getConditionDisplay()}
           </Text>
           
@@ -373,6 +378,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFA500',
   },
+  endedContainer: {
+    borderColor: '#ccc',
+    opacity: 0.9,
+  },
   imageContainer: {
     position: 'relative',
   },
@@ -399,11 +408,34 @@ const styles = StyleSheet.create({
     minWidth: 90,
     alignItems: 'center',
   },
+  endedCountdown: {
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+  },
   countdownText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  endedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  endedText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    backgroundColor: 'rgba(255, 0, 0, 0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
   productInfo: {
     padding: 16,
@@ -423,6 +455,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1a1a1a',
     lineHeight: 22,
+  },
+  endedTitle: {
+    color: '#666',
   },
   sellerRow: {
     flexDirection: 'row',
@@ -485,13 +520,9 @@ const styles = StyleSheet.create({
     color: '#dbbf0fff',
     fontWeight: '500',
     marginBottom: 4,
-
   },
-  currentBid: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FF6B35',
-    marginBottom: 4,
+  endedTextColor: {
+    color: '#666',
   },
   locationContainer: {
     marginBottom: 12,

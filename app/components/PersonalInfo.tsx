@@ -2,6 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -79,7 +80,6 @@ export default function PersonalInfo() {
         });
       }
     } catch (error) {
-      console.error("Error loading user data:", error);
     } finally {
       setLoading(false);
     }
@@ -116,7 +116,6 @@ export default function PersonalInfo() {
         Alert.alert("Error", result.error || "Failed to set default bank account");
       }
     } catch (error) {
-      console.error("Error setting default bank:", error);
       Alert.alert("Error", "Failed to set default bank account");
     }
   };
@@ -141,7 +140,6 @@ export default function PersonalInfo() {
                 Alert.alert("Error", result.error || "Failed to delete bank account");
               }
             } catch (error) {
-              console.error("Error deleting bank account:", error);
               Alert.alert("Error", "Failed to delete bank account");
             }
           }
@@ -168,7 +166,85 @@ export default function PersonalInfo() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text>Loading information...</Text>
+        <ImageBackground 
+          source={require('../assets/images/background_profile.jpg')} 
+          style={styles.backgroundImage}
+        >
+          <View style={styles.headerTop}>
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={require("../assets/icons/profile-picture.png")}
+                style={styles.avatar}
+              />
+              <View style={styles.strustPointContainer}>
+                <Image 
+                  source={require("../assets/icons/strustpoint.png")} 
+                  style={styles.strustPointIcon}
+                />
+                <Text style={styles.strustPointLabel}>
+                  Strust Point: 100
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.followContainer}>
+              <View style={styles.followColumn}>
+                <Image 
+                  style={styles.followIcon} 
+                  source={require('../assets/icons/follower.png')} 
+                />
+                <Text style={styles.followText}>
+                  Followers: 0
+                </Text>
+              </View>
+              
+              <TouchableOpacity>
+                <View style={[styles.followColumn, { 
+                  backgroundColor: 'green',
+                  borderRadius: 10
+                }]}>
+                  <Image 
+                    style={styles.followIcon} 
+                    source={require('../assets/icons/following.png')} 
+                  />
+                  <Text style={styles.followText}>
+                    Following: 0
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.orderBar}>
+            <View style={styles.orderColumn}>
+              <Image
+                style={styles.orderIcon}
+                source={require('../assets/icons/order.png')}
+              />
+              <Text style={styles.orderText}>
+                Your Orders
+              </Text>
+            </View>
+            
+            <View style={styles.orderColumn}>
+              <Image 
+                style={styles.orderIcon} 
+                source={require('../assets/icons/sell.png')} 
+              />
+              <Text style={styles.orderText}>
+                Your Selling
+              </Text>
+            </View>
+          </View>
+        </ImageBackground>
+        
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color="#00A86B" />
+          <Text style={styles.loadingText}>Loading your information...</Text>
+          <Text style={styles.loadingSubtext}>
+            We're getting your profile ready
+          </Text>
+        </View>
       </View>
     );
   }
@@ -264,12 +340,24 @@ export default function PersonalInfo() {
         </View>
         </ImageBackground>
       </View>
+      
+      <TouchableOpacity 
+        style={styles.floatingLogoutButton} 
+        onPress={handleLogout}
+      >
+        <Text style={styles.floatingLogoutText}> Logout</Text>
+      </TouchableOpacity>
+
       <ImageBackground 
         source={require('../assets/images/profile_background.jpg')} 
         style={styles.contentBackground}
         resizeMode="cover"
       >
-        <ScrollView style={styles.contentScrollView}>
+        <ScrollView 
+          style={styles.contentScrollView}
+          showsVerticalScrollIndicator={false} 
+          showsHorizontalScrollIndicator={false}
+        >
           <View style={styles.contentContainer}>
             <View style={styles.infoCard}>
               <View style={styles.cardHeader}>
@@ -449,15 +537,6 @@ export default function PersonalInfo() {
         </ScrollView>
       </ImageBackground>
 
-      <View style={styles.footerSection}>
-        <TouchableOpacity 
-          style={styles.logoutButton} 
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutText}>🚪 Logout</Text>
-        </TouchableOpacity>
-      </View>
-
       <AddBank
         visible={showAddBankModal}
         onClose={() => {
@@ -565,6 +644,47 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#333',
     marginTop: 4,
+  },
+  floatingLogoutButton: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    zIndex: 1000,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#e74c3c',
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 120,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  floatingLogoutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  loadingContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
   contentBackground: {
     flex: 1,
@@ -830,25 +950,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6c757d',
     textAlign: 'center',
-  },
-  footerSection: {
-    padding: 20,
-    backgroundColor: '#f5f5f5',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  logoutButton: {
-    paddingHorizontal: 40,
-    paddingVertical: 12,
-    backgroundColor: '#e74c3c',
-    borderRadius: 8,
-    alignItems: 'center',
-    minWidth: 150,
-    alignSelf: 'center',
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

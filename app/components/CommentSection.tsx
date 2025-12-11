@@ -1,4 +1,4 @@
-// components/CommentSection/CommentSection.tsx
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,7 +37,8 @@ interface CommentSectionProps {
 }
 
 const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const router = useRouter();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -133,48 +134,56 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
   };
 
   const handleCommentFocus = () => {
-    // Input focus được giữ nguyên
+  };
+
+  const handleAvatarPress = (userId: string) => {
+    router.push({
+      pathname: '../../screens/Profile/PublicProfile',
+      params: {
+        userId: userId
+      }
+    });
   };
 
   const handleCommentLongPress = (comment: Comment) => {
-    if (user && comment.userId === user.uid) {
+    if (user && (comment.userId === user.uid || isAdmin)) {
       setSelectedComment(comment);
       setShowActionMenu(true);
     }
   };
 
   const handleDeleteComment = async () => {
-    if (!selectedComment || !user) return;
+    if (!selectedComment || !user) {
+      setShowActionMenu(false);
+      setSelectedComment(null);
+      return;
+    }
 
-    Alert.alert(
-      'Delete Comment',
-      'Are you sure you want to delete this comment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await deleteComment(selectedComment.id, user.uid);
-              
-              if (result.success) {
-                await loadComments();
-                Alert.alert('Success', 'Comment deleted successfully');
-              } else {
-                Alert.alert('Error', result.error || 'Failed to delete comment');
-              }
-            } catch (error) {
-              console.error('Error deleting comment:', error);
-              Alert.alert('Error', 'Failed to delete comment');
-            } finally {
-              setShowActionMenu(false);
-              setSelectedComment(null);
-            }
-          }
-        }
-      ]
-    );
+    const isOwner = selectedComment.userId === user.uid;
+    const canDelete = isOwner || isAdmin;
+    
+    if (!canDelete) {
+      Alert.alert('Error', 'You do not have permission to delete this comment');
+      setShowActionMenu(false);
+      setSelectedComment(null);
+      return;
+    }
+
+    try {
+      setShowActionMenu(false);
+      const result = await deleteComment(selectedComment.id, user.uid);
+      
+      if (result.success) {
+        await loadComments();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to delete comment');
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      Alert.alert('Error', 'Failed to delete comment');
+    } finally {
+      setSelectedComment(null);
+    }
   };
 
   const handleEditComment = (comment: Comment) => {
@@ -237,7 +246,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
         </TouchableOpacity>
       </View>
 
-      {/* PHẦN COMMENTS - ScrollView đơn giản */}
       <View style={styles.commentsWrapper}>
         {comments.length === 0 ? (
           <View style={styles.emptyState}>
@@ -267,7 +275,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
                 delayLongPress={500}
                 activeOpacity={0.7}
               >
-                <View style={styles.avatarContainer}>
+                <TouchableOpacity
+                  style={styles.avatarContainer}
+                  onPress={() => handleAvatarPress(comment.userId)}
+                >
                   {comment.userAvatar ? (
                     <Image 
                       source={{ uri: comment.userAvatar }} 
@@ -280,7 +291,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
                       </Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.commentContent}>
                   <View style={styles.commentHeader}>
@@ -305,7 +316,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
         )}
       </View>
 
-      {/* Input Section */}
       <Animated.View 
         style={[
           styles.inputContainer,
@@ -351,7 +361,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
         </View>
       </Animated.View>
 
-      {/* Action Menu Modal */}
       <Modal
         visible={showActionMenu}
         transparent={true}
@@ -386,7 +395,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ productId }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Edit Comment Modal */}
       <Modal
         visible={showEditModal}
         transparent={true}
@@ -620,7 +628,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  // Action Menu Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -660,7 +667,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  // Edit Modal Styles
   editModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

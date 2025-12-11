@@ -101,7 +101,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error creating channel:', error);
       return {
         success: false,
         error: error.message
@@ -152,7 +151,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error creating AI channel:', error);
       return {
         success: false,
         error: error.message
@@ -185,7 +183,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error sending message:', error);
       return {
         success: false,
         error: error.message
@@ -219,7 +216,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error editing message:', error);
       return {
         success: false,
         error: error.message
@@ -276,7 +272,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error deleting message:', error);
       return {
         success: false,
         error: error.message
@@ -310,7 +305,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error sending image message:', error);
       return {
         success: false,
         error: error.message
@@ -334,7 +328,6 @@ export const chatService = {
         };
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
       return {
         success: false,
         error: error.message
@@ -367,7 +360,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error sending system message:', error);
       return {
         success: false,
         error: error.message
@@ -388,7 +380,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error exiting chat:', error);
       return {
         success: false,
         error: error.message
@@ -424,7 +415,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error getting user channels:', error);
       return {
         success: false,
         error: error.message,
@@ -458,7 +448,6 @@ export const chatService = {
           channels: channels
         });
       }, (error) => {
-        console.error('Error in channels subscription:', error);
         callback({
           success: false,
           error: error.message,
@@ -468,7 +457,6 @@ export const chatService = {
 
       return unsubscribe;
     } catch (error) {
-      console.error('Error setting up channels subscription:', error);
       return () => {};
     }
   },
@@ -496,7 +484,6 @@ export const chatService = {
           messages: messages
         });
       }, (error) => {
-        console.error('Error in messages listener:', error);
         callback({
           success: false,
           error: error.message,
@@ -507,7 +494,6 @@ export const chatService = {
       return unsubscribe;
 
     } catch (error) {
-      console.error('Error setting up messages listener:', error);
       callback({
         success: false,
         error: error.message,
@@ -555,7 +541,6 @@ export const chatService = {
       return { success: true };
 
     } catch (error) {
-      console.error('Error marking messages as read:', error);
       return {
         success: false,
         error: error.message
@@ -569,6 +554,10 @@ export const chatService = {
       let totalUnread = 0;
 
       for (const channel of channelsResult.channels) {
+        if (channel.id && channel.id.startsWith('AI_CHANNEL_')) {
+          continue;
+        }
+        
         const messagesRef = collection(db, 'messages');
         const q = query(
           messagesRef,
@@ -594,7 +583,6 @@ export const chatService = {
       return totalUnread;
       
     } catch (error) {
-      console.error('Error getting unread messages count:', error);
       return 0;
     }
   },
@@ -613,6 +601,10 @@ export const chatService = {
         for (const doc of snapshot.docs) {
           const channel = doc.data();
           if (channel.hiddenForUsers && channel.hiddenForUsers.includes(userId)) {
+            continue;
+          }
+          
+          if (doc.id && doc.id.startsWith('AI_CHANNEL_')) {
             continue;
           }
           
@@ -639,13 +631,11 @@ export const chatService = {
         
         callback(totalUnread);
       }, (error) => {
-        console.error('Error in unread messages count subscription:', error);
         callback(0);
       });
 
       return unsubscribe;
     } catch (error) {
-      console.error('Error setting up unread messages count subscription:', error);
       return () => {};
     }
   },
@@ -662,7 +652,6 @@ export const chatService = {
         return { success: false, error: 'Channel not found' };
       }
     } catch (error) {
-      console.error('Error getting channel:', error);
       return { success: false, error: error.message };
     }
   },
@@ -682,7 +671,6 @@ export const chatService = {
       };
 
     } catch (error) {
-      console.error('Error creating channel:', error);
       return {
         success: false,
         error: error.message

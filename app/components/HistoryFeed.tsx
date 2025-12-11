@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   RefreshControl,
   StyleSheet,
   Text,
@@ -72,11 +73,9 @@ const HistoryFeed: React.FC<HistoryFeedProps> = ({ tabType }) => {
       if (result.success) {
         setOrders(result.orders || []);
       } else {
-        console.error('Error loading orders:', result.error);
         setOrders([]);
       }
     } catch (error) {
-      console.error('Error loading orders:', error);
       setOrders([]);
     } finally {
       setLoading(false);
@@ -105,8 +104,16 @@ const HistoryFeed: React.FC<HistoryFeedProps> = ({ tabType }) => {
   if (!user) {
     return (
       <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>Please login to view your history</Text>
+        <View style={styles.emptyContainer}>
+          <Image 
+            source={require('../assets/icons/buy.gif')} 
+            style={styles.emptyImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.emptyTitle}>Please login to view your history</Text>
+          <Text style={styles.emptySubtitle}>
+            Login to see all your order and purchase history
+          </Text>
         </View>
       </View>
     );
@@ -115,11 +122,18 @@ const HistoryFeed: React.FC<HistoryFeedProps> = ({ tabType }) => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#00A86B" />
-          <Text style={styles.loadingText}>
-            {tabType === 'Orders' ? 'Loading your sales...' : 'Loading your purchases...'}
-          </Text>
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color="#00A86B" />
+            <Text style={styles.loadingText}>
+              {tabType === 'Orders' ? 'Loading your sales history...' : 'Loading your purchase history...'}
+            </Text>
+            <Text style={styles.loadingSubtext}>
+              {tabType === 'Orders' 
+                ? 'We\'re getting your complete sales history ready' 
+                : 'We\'re getting your complete purchase history ready'}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -142,13 +156,23 @@ const HistoryFeed: React.FC<HistoryFeedProps> = ({ tabType }) => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {tabType === 'Orders' ? 'No sales found' : 'No purchases found'}
+            <Image 
+              source={require('../assets/icons/buy.gif')} 
+              style={styles.emptyImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.emptyTitle}>
+              {tabType === 'Orders' ? 'No sales history found' : 'No purchase history found'}
             </Text>
-            <Text style={styles.emptySubText}>
+            <Text style={styles.emptySubtitle}>
               {tabType === 'Orders' 
-                ? 'Your sales history will appear here' 
-                : 'Your purchase history will appear here'}
+                ? 'Your complete sales history will appear here' 
+                : 'Your complete purchase history will appear here'}
+            </Text>
+            <Text style={styles.emptyHint}>
+              {tabType === 'Orders' 
+                ? '📦 All your sales including completed ones' 
+                : '🛒 All your purchases including completed ones'}
             </Text>
           </View>
         }
@@ -167,19 +191,32 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
-  centerContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
+  loadingContent: {
+    alignItems: 'center',
+    padding: 30,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  errorText: {
-    fontSize: 16,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
   },
@@ -188,17 +225,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    minHeight: 400,
   },
-  emptyText: {
-    fontSize: 18,
+  emptyImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  emptySubText: {
-    fontSize: 14,
+  emptySubtitle: {
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  emptyHint: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 16,
+    fontStyle: 'italic',
   },
 });
 

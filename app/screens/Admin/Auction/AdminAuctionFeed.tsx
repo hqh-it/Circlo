@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getAuctionProducts, searchAuctionProducts } from '../../../../services/Auction/auctionService';
+import { db } from '../../../../firebaseConfig';
 import AdminProductCard from '../../../components/Admin/Product/AdminProductCard';
 import SearchBar from '../../../components/SearchBar';
 
@@ -40,10 +41,10 @@ interface AuctionProduct {
   auctionInfo?: {
     currentBid: number;
     startPrice: number;
-    startTime: Date;
-    endTime: Date;
+    startTime: any;
+    endTime: any;
     bidCount: number;
-    status: 'active' | 'ended';
+    status: 'active' | 'ended' | 'pending';
     bidIncrement: number;
     buyNowPrice?: number;
     highestBidder?: string | null;
@@ -63,61 +64,8 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
   const [filteredProducts, setFilteredProducts] = useState<AuctionProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-
-  const loadAuctionProducts = useCallback(async () => {
-    try {
-      const result = await getAuctionProducts({});
-      
-      if (result.success && result.products) {
-        const auctionProducts = result.products.map(auction => {
-          const auctionData = auction.auctionInfo || {};
-          
-          return {
-            id: auction.id,
-            type: 'auction' as const,
-            images: auction.images || [],
-            title: auction.title || 'No Title',
-            price: auction.startPrice || auction.currentBid || 0,
-            address: auction.address || {},
-            likeCount: auction.likeCount || 0,
-            viewCount: auction.viewCount || 0,
-            sellerAvatar: auction.sellerAvatar,
-            sellerName: auction.sellerName || 'Unknown Seller',
-            condition: auction.condition || 'used',
-            createdAt: auction.createdAt,
-            sellerId: auction.sellerId,
-            status: auction.status || 'pending',
-            auctionInfo: {
-              currentBid: auction.currentBid || auction.startPrice || 0,
-              startPrice: auction.startPrice || 0,
-              startTime: auctionData.startTime,
-              endTime: auctionData.endTime,
-              bidCount: auctionData.bidCount || 0,
-              status: auctionData.status || 'active',
-              bidIncrement: auctionData.bidIncrement || 0,
-              buyNowPrice: auctionData.buyNowPrice,
-              highestBidder: auctionData.highestBidder
-            }
-          };
-        });
-
-        const filteredProducts = auctionProducts.filter(product => 
-          product.status === activeTab
-        );
-        
-        setProducts(filteredProducts);
-        setFilteredProducts(filteredProducts);
-      } else {
-        setProducts([]);
-        setFilteredProducts([]);
-      }
-    } catch (error) {
-      console.error('Error loading auction products:', error);
-      setProducts([]);
-      setFilteredProducts([]);
-    }
-  }, [activeTab]);
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     try {
@@ -127,16 +75,60 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
         setLoading(true);
       }
 
-      await loadAuctionProducts();
+      // Query từ collection 'auction_products'
+      const auctionsRef = collection(db, 'auction_products');
+      const auctionsQuery = query(
+        auctionsRef,
+        where('status', '==', activeTab),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(auctionsQuery);
+      const auctionProducts: AuctionProduct[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const auctionData = data.auctionInfo || {};
+        
+        auctionProducts.push({
+          id: doc.id,
+          type: 'auction' as const,
+          images: data.images || [],
+          title: data.title || 'No Title',
+          price: data.startPrice || data.currentBid || 0,
+          address: data.address || {},
+          likeCount: data.likeCount || 0,
+          viewCount: data.viewCount || 0,
+          sellerAvatar: data.sellerAvatar,
+          sellerName: data.sellerName || 'Unknown Seller',
+          condition: data.condition || 'used',
+          createdAt: data.createdAt,
+          sellerId: data.sellerId,
+          status: data.status || 'pending',
+          auctionInfo: {
+            currentBid: data.currentBid || data.startPrice || 0,
+            startPrice: data.startPrice || 0,
+            startTime: auctionData.startTime,
+            endTime: auctionData.endTime,
+            bidCount: auctionData.bidCount || 0,
+            status: auctionData.status || 'pending',
+            bidIncrement: auctionData.bidIncrement || 0,
+            buyNowPrice: auctionData.buyNowPrice,
+            highestBidder: auctionData.highestBidder
+          }
+        } as AuctionProduct);
+      });
+
+      setProducts(auctionProducts);
+      setFilteredProducts(auctionProducts);
 
     } catch (error) {
-      console.error('Error loading products:', error);
-      Alert.alert('Error', 'Failed to load products');
+      Alert.alert('Error', 'Failed to load auctions');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadAuctionProducts]);
+  }, [activeTab]);
 
   const handleSearchResults = async (searchTerm: string) => {
     setIsSearching(true);
@@ -148,50 +140,58 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
     }
 
     try {
-      const result = await searchAuctionProducts(searchTerm);
-      if (result.success) {
-        const filtered = result.products.filter(product => 
-          product.status === activeTab
-        );
+      // Tìm kiếm trong collection auction_products
+      const auctionsRef = collection(db, 'auction_products');
+      const auctionsQuery = query(
+        auctionsRef,
+        where('status', '==', activeTab),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(auctionsQuery);
+      const allAuctions: AuctionProduct[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const auctionData = data.auctionInfo || {};
         
-        const auctionProducts = filtered.map(auction => {
-          const auctionData = auction.auctionInfo || {};
-          
-          return {
-            id: auction.id,
-            type: 'auction' as const,
-            images: auction.images || [],
-            title: auction.title || 'No Title',
-            price: auction.startPrice || auction.currentBid || 0,
-            address: auction.address || {},
-            likeCount: auction.likeCount || 0,
-            viewCount: auction.viewCount || 0,
-            sellerAvatar: auction.sellerAvatar,
-            sellerName: auction.sellerName || 'Unknown Seller',
-            condition: auction.condition || 'used',
-            createdAt: auction.createdAt,
-            sellerId: auction.sellerId,
-            status: auction.status || 'pending',
-            auctionInfo: {
-              currentBid: auction.currentBid || auction.startPrice || 0,
-              startPrice: auction.startPrice || 0,
-              startTime: auctionData.startTime,
-              endTime: auctionData.endTime,
-              bidCount: auctionData.bidCount || 0,
-              status: auctionData.status || 'active',
-              bidIncrement: auctionData.bidIncrement || 0,
-              buyNowPrice: auctionData.buyNowPrice,
-              highestBidder: auctionData.highestBidder
-            }
-          };
-        });
-        
-        setFilteredProducts(auctionProducts);
-      } else {
-        setFilteredProducts([]);
-      }
+        allAuctions.push({
+          id: doc.id,
+          type: 'auction' as const,
+          images: data.images || [],
+          title: data.title || 'No Title',
+          price: data.startPrice || data.currentBid || 0,
+          address: data.address || {},
+          likeCount: data.likeCount || 0,
+          viewCount: data.viewCount || 0,
+          sellerAvatar: data.sellerAvatar,
+          sellerName: data.sellerName || 'Unknown Seller',
+          condition: data.condition || 'used',
+          createdAt: data.createdAt,
+          sellerId: data.sellerId,
+          status: data.status || 'pending',
+          auctionInfo: {
+            currentBid: data.currentBid || data.startPrice || 0,
+            startPrice: data.startPrice || 0,
+            startTime: auctionData.startTime,
+            endTime: auctionData.endTime,
+            bidCount: auctionData.bidCount || 0,
+            status: auctionData.status || 'pending',
+            bidIncrement: auctionData.bidIncrement || 0,
+            buyNowPrice: auctionData.buyNowPrice,
+            highestBidder: auctionData.highestBidder
+          }
+        } as AuctionProduct);
+      });
+
+      // Filter trên client với searchTerm
+      const searchResults = allAuctions.filter(auction => {
+        const searchText = `${auction.title} ${auction.condition} ${auction.sellerName}`.toLowerCase();
+        return searchText.includes(searchTerm.toLowerCase());
+      });
+      
+      setFilteredProducts(searchResults);
     } catch (error) {
-      console.error('Search error:', error);
       setFilteredProducts([]);
     } finally {
       setIsSearching(false);
@@ -211,30 +211,15 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
   };
 
   const handleApproveProduct = async (productId: string) => {
-    try {
-      Alert.alert('Success', 'Auction approved successfully!');
-      loadProducts(true);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to approve auction');
-    }
+    await loadProducts(true);
   };
 
   const handleRejectProduct = async (productId: string) => {
-    try {
-      Alert.alert('Success', 'Auction rejected successfully!');
-      loadProducts(true);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to reject auction');
-    }
+    await loadProducts(true);
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    try {
-      Alert.alert('Success', 'Auction deleted successfully!');
-      loadProducts(true);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to delete auction');
-    }
+    await loadProducts(true);
   };
 
   const handleViewDetail = (productId: string, isAuction: boolean) => {
@@ -242,6 +227,10 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
       pathname: '/screens/Auction/auction_detail',
       params: { id: productId }
     });
+  };
+
+  const handleProductUpdate = () => {
+    loadProducts(true);
   };
 
   const handleBack = () => {
@@ -257,8 +246,8 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
   };
 
   const getProductStats = () => {
-    const pendingCount = filteredProducts.filter(p => p.status === 'pending').length;
-    const activeCount = filteredProducts.filter(p => p.status === 'active').length;
+    const pendingCount = products.filter(p => p.status === 'pending').length;
+    const activeCount = products.filter(p => p.status === 'active').length;
     
     return { pendingCount, activeCount };
   };
@@ -276,7 +265,6 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Custom Header with Back Button */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#003B36" />
@@ -289,8 +277,38 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
         <SearchBar
           placeholder="Search auctions..."
           onSearchResults={(results) => {
-            const searchResults = results.filter(product => product.status === activeTab);
-            setFilteredProducts(searchResults);
+            // Chuyển đổi kết quả từ SearchBar sang định dạng AuctionProduct
+            const auctionResults = results
+              .filter(product => product.status === activeTab)
+              .map(product => ({
+                id: product.id,
+                type: 'auction' as const,
+                images: product.images || [],
+                title: product.title || 'No Title',
+                price: product.price || 0,
+                address: product.address || {},
+                likeCount: product.likeCount || 0,
+                viewCount: product.viewCount || 0,
+                sellerAvatar: product.sellerAvatar,
+                sellerName: product.sellerName || 'Unknown Seller',
+                condition: product.condition || 'used',
+                createdAt: product.createdAt,
+                sellerId: product.sellerId,
+                status: product.status || 'pending',
+                auctionInfo: {
+                  currentBid: product.price || 0,
+                  startPrice: product.price || 0,
+                  startTime: null,
+                  endTime: null,
+                  bidCount: 0,
+                  status: 'active',
+                  bidIncrement: 0,
+                  buyNowPrice: undefined,
+                  highestBidder: null
+                }
+              })) as AuctionProduct[];
+            
+            setFilteredProducts(auctionResults);
           }}
           onSearchStart={handleSearchStart}
           onSearchEnd={handleSearchEnd}
@@ -350,6 +368,7 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
             onReject={handleRejectProduct}
             onDelete={handleDeleteProduct}
             onViewDetail={handleViewDetail}
+            onProductUpdate={handleProductUpdate}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -369,9 +388,16 @@ const AdminAuctionFeed: React.FC<AdminAuctionFeedProps> = ({
                 <Text style={styles.emptyText}>Searching auctions...</Text>
               </>
             ) : (
-              <Text style={styles.emptyText}>
-                No {activeTab} auctions found
-              </Text>
+              <>
+                <Text style={styles.emptyText}>
+                  No {activeTab} auctions found
+                </Text>
+                {searchTerm && (
+                  <Text style={styles.emptySubText}>
+                    No auctions match "{searchTerm}"
+                  </Text>
+                )}
+              </>
             )}
           </View>
         }
@@ -386,7 +412,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  // Custom Header Styles
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -406,7 +431,7 @@ const styles = StyleSheet.create({
     color: '#003B36',
   },
   headerRightPlaceholder: {
-    width: 40, // Balance the layout
+    width: 40,
   },
   searchContainer: {
     padding: 16,
@@ -507,6 +532,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#666',
     marginBottom: 8,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
   emptyListContent: {
     flexGrow: 1,

@@ -21,6 +21,7 @@ interface FilterDrawerProps {
   onClose: () => void;
   onApplyFilters: (filterResult: any) => void;
   productType: 'normal' | 'auction';
+  context?: 'public' | 'profile';
 }
 
 interface Category {
@@ -66,7 +67,13 @@ const priceRanges: PriceRange[] = [
   { label: 'Over 5M', value: [5000000, null] }
 ];
 
-const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFilters, productType }) => {
+const FilterDrawer: React.FC<FilterDrawerProps> = ({ 
+  visible, 
+  onClose, 
+  onApplyFilters, 
+  productType,
+  context = 'public' 
+}) => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [selectedSort, setSelectedSort] = useState<string>('');
@@ -88,7 +95,6 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFi
         const provincesData = fetchProvinces();
         setProvinces(provincesData);
       } catch (error) {
-        console.error('Error loading provinces:', error);
         setProvinces([]);
       }
     };
@@ -165,6 +171,10 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFi
         maxPrice: priceRange[1] !== 20000000 ? priceRange[1] : undefined,
       };
 
+      if (productType === 'auction' && context === 'public') {
+        filters.auctionStatus = 'active';
+      }
+
       Object.keys(filters).forEach(key => {
         if (filters[key] === undefined) {
           delete filters[key];
@@ -202,7 +212,6 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({ visible, onClose, onApplyFi
       
       onClose();
     } catch (error) {
-      console.error('Error applying filters:', error);
       onClose();
     }
   };

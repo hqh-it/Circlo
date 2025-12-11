@@ -12,6 +12,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getAuctionProductById } from '../../../services/Auction/auctionService';
 import { useAuth } from '../../../services/Auth/AuthContext';
 import { aiChatService } from '../../../services/Chat/aiChatService';
 import { auctionChatService } from '../../../services/Chat/auctionChatService';
@@ -32,11 +33,13 @@ interface Channel {
   participants: string[];
   participantDetails: ParticipantDetails;
   productId: string;
+  productInfo?: any;
   lastMessage: string;
   lastMessageAt: any;
   createdAt: any;
   type: string;
   unreadCount: number;
+  isAuction?: boolean;
 }
 
 interface AuctionChannel {
@@ -92,13 +95,36 @@ const ChatListScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadProductImage = async (productId: string): Promise<string | undefined> => {
+  const loadProductImage = async (productId: string, productInfo?: any): Promise<string | undefined> => {
     try {
-      const result = await getProductById(productId);
-      const product = result.product as any;
-      if (result.success && product && Array.isArray(product.images) && product.images.length > 0) {
-        return product.images[0];
+      if (productInfo && productInfo.auctionId) {
+        try {
+          const result = await getAuctionProductById(productInfo.auctionId);
+          if (result.success && result.product) {
+            const auctionProduct = result.product as any;
+            if (auctionProduct.images && Array.isArray(auctionProduct.images) && auctionProduct.images.length > 0) {
+              return auctionProduct.images[0];
+            }
+          }
+        } catch (error) {
+          if (productInfo.images && Array.isArray(productInfo.images) && productInfo.images.length > 0) {
+            return productInfo.images[0];
+          }
+        }
       }
+      
+      if (productInfo && productInfo.images && Array.isArray(productInfo.images) && productInfo.images.length > 0) {
+        return productInfo.images[0];
+      }
+      
+      const result = await getProductById(productId);
+      if (result.success && result.product) {
+        const product = result.product as any;
+        if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+          return product.images[0];
+        }
+      }
+      
       return undefined;
     } catch (error) {
       return undefined;
@@ -112,7 +138,7 @@ const ChatListScreen = () => {
       }
       
       if (productInfo?.productId) {
-        return await loadProductImage(productInfo.productId);
+        return await loadProductImage(productInfo.productId, productInfo);
       }
       
       return undefined;
@@ -121,31 +147,35 @@ const ChatListScreen = () => {
     }
   };
 
-  const loadChannelUnreadCount = async (channelId: string, userId: string): Promise<number> => {
-    try {
-      let unreadCount = 0;
-      
-      const messagesResult: MessagesResult = await new Promise((resolve) => {
-        const unsubscribe = chatService.getChannelMessages(channelId, (result: MessagesResult) => {
-          resolve(result);
-          unsubscribe();
-        });
-      });
-      
-      if (messagesResult.success && messagesResult.messages) {
-        messagesResult.messages.forEach((message: any) => {
-          if (message.senderId !== userId && 
-              (!message.readBy || !message.readBy.includes(userId))) {
-            unreadCount++;
-          }
-        });
-      }
-      
-      return unreadCount;
-    } catch (error) {
+const loadChannelUnreadCount = async (channelId: string, userId: string): Promise<number> => {
+  try {
+    if (channelId.startsWith('AI_CHANNEL_')) {
       return 0;
     }
-  };
+    
+    let unreadCount = 0;
+    
+    const messagesResult: MessagesResult = await new Promise((resolve) => {
+      const unsubscribe = chatService.getChannelMessages(channelId, (result: MessagesResult) => {
+        resolve(result);
+        unsubscribe();
+      });
+    });
+    
+    if (messagesResult.success && messagesResult.messages) {
+      messagesResult.messages.forEach((message: any) => {
+        if (message.senderId !== userId && 
+            (!message.readBy || !message.readBy.includes(userId))) {
+          unreadCount++;
+        }
+      });
+    }
+    
+    return unreadCount;
+  } catch (error) {
+    return 0;
+  }
+};
 
   const loadAIChannel = async (): Promise<ChannelWithOtherUser[]> => {
     if (!currentUser) return [];
@@ -212,7 +242,7 @@ const ChatListScreen = () => {
               
               let productImage: string | undefined;
               if (channel.productId) {
-                productImage = await loadProductImage(channel.productId);
+                productImage = await loadProductImage(channel.productId, channel.productInfo);
               }
               
               const unreadCount = await loadChannelUnreadCount(channel.id, currentUser.uid);
@@ -365,10 +395,14 @@ const ChatListScreen = () => {
       return;
     }
     
+    const isAuctionChannel = channel.productInfo && (channel.productInfo.auctionId || channel.productInfo.productType === 'auction');
+    
     router.push({
       pathname: '../../screens/Chat/chatScreen',
       params: {
         channelId: channel.id,
+        ...(channel.productInfo && { productData: JSON.stringify(channel.productInfo) }),
+        ...(isAuctionChannel && { isAuctionOrder: 'true' })
       }
     });
   };
@@ -515,9 +549,6 @@ const ChatListScreen = () => {
               style={styles.productImage}
               resizeMode="cover"
             />
-            <View style={styles.auctionBadge}>
-              <Text style={styles.auctionBadgeText}>AUCTION</Text>
-            </View>
           </View>
         )}
         
@@ -740,20 +771,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 80,
     backgroundColor: '#f8f8f8',
-  },
-  auctionBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#FF9500',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  auctionBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   chatContent: {
     flexDirection: 'row',

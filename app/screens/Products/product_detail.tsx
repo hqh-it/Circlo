@@ -1,12 +1,16 @@
 // screens/Products/product_detail.tsx
 import { ResizeMode, Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,7 +27,7 @@ import BuyNow from '../../components/BuyNow';
 import CommentSection from '../../components/CommentSection';
 import FollowButton from '../../components/FollowButton';
 import Header from '../../components/header_for_detail';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface ProductDetail {
   id: string;
@@ -64,6 +68,12 @@ const ProductDetailScreen = () => {
   const [videoRef, setVideoRef] = useState<any>(null);
   const [showBuyNowPopup, setShowBuyNowPopup] = useState(false);
   const [orderUpdated, setOrderUpdated] = useState(0);
+  
+  const footerAnim = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const scrollDirection = useRef('up');
+  const footerVisible = useRef(true);
 
   const productId = params.id as string;
 
@@ -94,6 +104,30 @@ const ProductDetailScreen = () => {
   }, [productId, router, orderUpdated]);
 
   const imageItems = product?.images || [];
+
+  const handleAskAI = () => {
+    if (!product) return;
+    
+    const productInfoForAI = {
+      id: product.id,
+      title: product.title,
+      price: product.price,
+      images: product.images,
+      sellerId: product.sellerId,
+      description: product.description,
+      category: product.category,      
+      condition: product.condition,  
+      address: product.address,      
+      sellerName: product.sellerName,   
+    };
+    
+    router.push({
+      pathname: '../../screens/Chat/AIChatScreen',
+      params: {
+        productData: JSON.stringify(productInfoForAI)
+      }
+    });
+  };
 
   const handleContactSeller = async () => {
     if (!product) return;
@@ -201,6 +235,54 @@ const ProductDetailScreen = () => {
     Alert.alert('Success', 'Purchase request sent successfully!');
   };
 
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const currentY = event.nativeEvent.contentOffset.y;
+        const scrollThreshold = 50;
+        
+        if (currentY > lastScrollY.current + 5) {
+          scrollDirection.current = 'down';
+        } else if (currentY < lastScrollY.current - 5) {
+          scrollDirection.current = 'up';
+        }
+        
+        lastScrollY.current = currentY;
+        
+        if (scrollDirection.current === 'down' && currentY > scrollThreshold && footerVisible.current) {
+          hideFooter();
+        } else if (scrollDirection.current === 'up' && !footerVisible.current) {
+          showFooter();
+        }
+      },
+      useNativeDriver: false,
+    }
+  );
+
+  const hideFooter = () => {
+    footerVisible.current = false;
+    Animated.timing(footerAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const showFooter = () => {
+    footerVisible.current = true;
+    Animated.timing(footerAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const footerTranslateY = footerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 170],
+  });
+
   const renderMediaContent = () => {
     const currentImage = imageItems[mediaIndex];
     
@@ -276,11 +358,13 @@ const ProductDetailScreen = () => {
     <SafeAreaView style={styles.container}>
       <Header title="Product's Detail"/>
       
-      <ScrollView 
+      <Animated.ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={true}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         <View style={styles.mediaSection}>
           <View style={styles.mediaContainer}>
@@ -371,11 +455,7 @@ const ProductDetailScreen = () => {
               <View style={styles.sellerText}>
                 <Text style={styles.sellerName}>{product.sellerName || 'Unknown Seller'}</Text>
               </View> 
-              <View style={{
-                width:1,
-                height:60, 
-                backgroundColor: '#d5d5d5ff',
-              }}></View>            
+              <View style={styles.divider}></View>            
               <View style={styles.followButtonWrapper}>
                 <FollowButton 
                   targetUserId={product.sellerId}
@@ -420,25 +500,56 @@ const ProductDetailScreen = () => {
           </View>
         </View>
         <CommentSection productId={productId}/>
-      </ScrollView>
+      </Animated.ScrollView>
 
-      <View style={styles.footer}>
+      <Animated.View style={[
+        styles.footer,
+        {
+          transform: [{ translateY: footerTranslateY }],
+        }
+      ]}>
         <TouchableOpacity 
-          style={styles.contactButton}
-          onPress={handleContactSeller}
+          onPress={handleAskAI}
+          activeOpacity={0.8}
+          style={styles.aiButtonTouchable}
         >
-          <Text style={styles.contactButtonText}>
-            💬 Contact Seller
-          </Text>
+          <LinearGradient
+            colors={[ "#effff9ff","#dafff1ff", "#66f2f0ff", "#f2f266ff"]}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.aiButtonGradient}
+          >
+            <Image 
+              source={require('../../assets/icons/AI3.gif')} 
+              style={styles.aiButtonImage}
+            />
+            <View style={styles.aiButtonTextContainer}>
+              <Text style={styles.aiButtonMainText}>Ask Circlo AI</Text>
+              <Text style={styles.aiButtonSubText}>Get instant help & info</Text>
+            </View>
+            <View style={styles.aiButtonImage}></View>
+          </LinearGradient>
         </TouchableOpacity>
-        <BuyButton
-          productId={product.id}
-          sellerId={product.sellerId}
-          onPress={handleBuyNowPress}
-          disabled={product.status !== 'active' || isSeller}
-          refreshTrigger={orderUpdated}
-        />
-      </View>
+        
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={handleContactSeller}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.contactButtonText}>💬 Contact Seller</Text>
+          </TouchableOpacity>
+          
+          <BuyButton
+            productId={product.id}
+            sellerId={product.sellerId}
+            onPress={handleBuyNowPress}
+            disabled={product.status !== 'active' || isSeller}
+            refreshTrigger={orderUpdated}
+          />
+
+        </View>
+      </Animated.View>
 
       <BuyNow
         visible={showBuyNowPopup}
@@ -464,7 +575,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   scrollContent: {
-    paddingBottom: 50,
+    paddingBottom:0,
   },
   centerContainer: {
     flex: 1,
@@ -715,8 +826,13 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginBottom: 6,
   },
+  divider: {
+    width: 1,
+    height: 60,
+    backgroundColor: '#d5d5d5ff',
+  },
   followButtonWrapper: {
-    width: SCREEN_WIDTH*0.15, 
+    width: SCREEN_WIDTH * 0.15,
     alignItems: 'center',
   },
   locationSection: {
@@ -783,17 +899,66 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    padding: 16,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e5e5ea',
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 15,
+  },
+  aiButtonTouchable: {
+    marginBottom: 12,
+    borderRadius: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: '#00A86B',
+  },
+  aiButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  aiButtonImage: {
+    width: 45,
+    height: 45,
+    borderRadius: 10,
+  },
+  aiButtonTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  aiButtonMainText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#ffffff',
+    textShadowColor: '#003b369e',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 1,
+    textAlign: 'center',
+  },
+  aiButtonSubText: {
+    fontSize: 14,
+    color: '#003b36ff',
+    fontWeight: '600',
+    opacity: 0.9,
+    textAlign: 'center',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
   },
   contactButton: {
     flex: 1,
@@ -801,13 +966,20 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#00A86B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   contactButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#00A86B',
+    paddingHorizontal: 8,
   },
 });
 

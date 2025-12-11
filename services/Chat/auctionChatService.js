@@ -27,28 +27,25 @@ import {
 const orderCreationLocks = new Map();
 
 export const auctionChatService = {
-  parseTimestamp: (timestamp) => {
-    if (!timestamp) return new Date();
-    
-    try {
-      if (timestamp.type === 'firestore/timestamp/1.0' && timestamp.seconds) {
-        return new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
-      }
-      
-      if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate();
-      }
-      
-      if (timestamp instanceof Date) {
-        return timestamp;
-      }
-      
-      return new Date(timestamp);
-    } catch (error) {
-      console.error('Error parsing timestamp:', error, timestamp);
-      return new Date();
+parseTimestamp: (timestamp) => {
+  if (!timestamp) return new Date();
+  
+  try {
+    if (timestamp.seconds !== undefined && timestamp.nanoseconds !== undefined) {
+      return new Date(timestamp.seconds * 1000);
     }
-  },
+
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      return timestamp.toDate();
+    }
+    if (timestamp instanceof Date) {
+      return timestamp;
+    }
+    return new Date(timestamp);
+  } catch (error) {
+    return new Date();
+  }
+},
 
   getAuctionStatus: (startTime, endTime) => {
     const now = new Date();
@@ -105,7 +102,35 @@ export const auctionChatService = {
       };
 
     } catch (error) {
-      console.error('Error creating auction channel:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  exitAuctionRoom: async (channelId, userId) => {
+    try {
+      const channelRef = doc(db, 'auction_channels', channelId);
+      
+      await updateDoc(channelRef, {
+        participants: arrayRemove(userId),
+        participantCount: increment(-1),
+        updatedAt: serverTimestamp()
+      });
+
+      await auctionChatService.createSystemMessage(
+        channelId,
+        'user_left',
+        `👋 A participant has left the auction room`,
+        { userId }
+      );
+
+      return {
+        success: true
+      };
+
+    } catch (error) {
       return {
         success: false,
         error: error.message
@@ -186,7 +211,6 @@ export const auctionChatService = {
       };
 
     } catch (error) {
-      console.error('Error placing bid:', error);
       return {
         success: false,
         error: error.message
@@ -219,7 +243,6 @@ export const auctionChatService = {
       };
 
     } catch (error) {
-      console.error('Error getting auction channels:', error);
       return {
         success: false,
         error: error.message,
@@ -251,7 +274,6 @@ export const auctionChatService = {
           messages: messages
         });
       }, (error) => {
-        console.error('Error listening to auction messages:', error);
         callback({
           success: false,
           error: error.message,
@@ -262,7 +284,6 @@ export const auctionChatService = {
       return unsubscribe;
 
     } catch (error) {
-      console.error('Error setting up auction message listener:', error);
       callback({
         success: false,
         error: error.message,
@@ -284,7 +305,6 @@ export const auctionChatService = {
         return { success: false, error: 'Auction channel not found' };
       }
     } catch (error) {
-      console.error('Error getting auction channel:', error);
       return { success: false, error: error.message };
     }
   },
@@ -299,7 +319,6 @@ export const auctionChatService = {
 
       return { success: true };
     } catch (error) {
-      console.error('Error adding user to watchers:', error);
       return { success: false, error: error.message };
     }
   },
@@ -314,7 +333,6 @@ export const auctionChatService = {
 
       return { success: true };
     } catch (error) {
-      console.error('Error removing user from watchers:', error);
       return { success: false, error: error.message };
     }
   },
@@ -337,7 +355,6 @@ export const auctionChatService = {
         messageId: messageRef.id
       };
     } catch (error) {
-      console.error('Error creating system message:', error);
       return {
         success: false,
         error: error.message
@@ -392,7 +409,6 @@ export const auctionChatService = {
       return { success: true };
 
     } catch (error) {
-      console.error('Error marking auction messages as read:', error);
       return {
         success: false,
         error: error.message
@@ -431,7 +447,6 @@ export const auctionChatService = {
       return totalUnread;
       
     } catch (error) {
-      console.error('Error counting unread auction messages:', error);
       return 0;
     }
   },
@@ -469,7 +484,6 @@ export const auctionChatService = {
         return { success: false, error: 'Auction channel not found' };
       }
     } catch (error) {
-      console.error('Error getting auction channel by auction ID:', error);
       return { success: false, error: error.message };
     }
   },
@@ -500,7 +514,6 @@ export const auctionChatService = {
       
       return { success: true };
     } catch (error) {
-      console.error('Error adding user to auction channel:', error);
       return { success: false, error: error.message };
     }
   },
@@ -521,7 +534,6 @@ export const auctionChatService = {
         avatarURL: null
       };
     } catch (error) {
-      console.error('Error getting user info:', error);
       return {
         uid: userId,
         displayName: 'User',
@@ -535,7 +547,6 @@ export const auctionChatService = {
       const userPromises = userIds.map(id => auctionChatService.getUserInfo(id));
       return await Promise.all(userPromises);
     } catch (error) {
-      console.error('Error getting multiple users info:', error);
       return [];
     }
   },
@@ -574,7 +585,6 @@ export const auctionChatService = {
       
       return { success: true };
     } catch (error) {
-      console.error('Error updating auction channel:', error);
       return { success: false, error: error.message };
     }
   },
@@ -611,7 +621,6 @@ export const auctionChatService = {
         };
       }
     } catch (error) {
-      console.error('Error checking existing auction order:', error);
       return { exists: false };
     }
   },
@@ -752,10 +761,8 @@ export const auctionChatService = {
           updatedAt: serverTimestamp()
         });
       } catch (updateError) {
-        console.error('Error resetting order creation flag:', updateError);
       }
 
-      console.error('Error creating auction order automatically:', error);
       return {
         success: false,
         error: error.message
@@ -772,7 +779,6 @@ export const auctionChatService = {
       });
       return { success: true };
     } catch (error) {
-      console.error('Error updating auction status:', error);
       return { success: false, error: error.message };
     }
   }

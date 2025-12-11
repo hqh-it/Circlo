@@ -1,12 +1,12 @@
-// OrderScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  FlatList,
+  Image,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../services/Auth/AuthContext';
@@ -61,12 +61,13 @@ const OrderScreen: React.FC = () => {
     try {
       const result = await getUserOrders(user.uid, 'buying');
       if (result.success) {
-        setOrders(result.orders || []);
-      } else {
-        console.error('Error loading orders:', result.error);
+        const activeOrders = (result.orders || []).filter(
+          (order: Order) => order.status !== 'completed'
+        );
+        setOrders(activeOrders);
       }
     } catch (error) {
-      console.error('Error loading orders:', error);
+      setOrders([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,7 +97,15 @@ const OrderScreen: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <Header title="Your Orders" />
         <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>Please login to view your orders</Text>
+          <Image 
+            source={require('../../assets/icons/buy.gif')} 
+            style={styles.emptyImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.emptyTitle}>Please login to view your orders</Text>
+          <Text style={styles.emptySubtitle}>
+            Login to see all your purchase orders and track them
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -106,9 +115,14 @@ const OrderScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <Header title="Your Orders" />
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#00A86B" />
-          <Text style={styles.loadingText}>Loading your orders...</Text>
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color="#00A86B" />
+            <Text style={styles.loadingText}>Loading your orders...</Text>
+            <Text style={styles.loadingSubtext}>
+              We're getting your order information ready
+            </Text>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -133,9 +147,17 @@ const OrderScreen: React.FC = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No orders found</Text>
-            <Text style={styles.emptySubText}>
-              Your purchase orders will appear here
+            <Image 
+              source={require('../../assets/icons/buy.gif')} 
+              style={styles.emptyImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.emptyTitle}>No active orders found</Text>
+            <Text style={styles.emptySubtitle}>
+              Your active purchase orders will appear here
+            </Text>
+            <Text style={styles.emptyHint}>
+              🛒 Check history tab for completed orders
             </Text>
           </View>
         }
@@ -160,13 +182,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  errorText: {
-    fontSize: 16,
+  loadingContent: {
+    alignItems: 'center',
+    padding: 30,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
   },
@@ -175,17 +216,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    minHeight: 400,
   },
-  emptyText: {
-    fontSize: 18,
+  emptyImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  emptySubText: {
-    fontSize: 14,
+  emptySubtitle: {
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  emptyHint: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 16,
+    fontStyle: 'italic',
   },
 });
 

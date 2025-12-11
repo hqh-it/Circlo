@@ -23,6 +23,9 @@ export default function AdminHome() {
   const handleManageUsers = () => {
     router.push("/screens/Admin/User/AdminUserList");
   };
+  const handleHomePage = () => {
+    router.push("/screens/Home/homepage");
+  };
 
   const handleManageProducts = () => {
     router.push("/screens/Admin/Product/AdminProductFeed");
@@ -50,21 +53,19 @@ export default function AdminHome() {
         </View>
 
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>👥</Text>
-            <Text style={styles.statLabel}>User</Text>
-            <Text style={styles.statText}>Management</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>📦</Text>
-            <Text style={styles.statLabel}>Product</Text>
-            <Text style={styles.statText}>Management</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>⚡</Text>
-            <Text style={styles.statLabel}>Auction</Text>
-            <Text style={styles.statText}>Management</Text>
-          </View>
+          <TouchableOpacity onPress={handleHomePage} style={styles.statCard}>
+            <Text style={styles.statLabel}>Home Page</Text>
+            <Text style={styles.statText}>home page of Circlo app</Text>
+          </TouchableOpacity>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Product</Text>
+              <Text style={styles.statText}>Management</Text>
+            </View>
+
+          <TouchableOpacity onPress={handleLogout} style={styles.statCard}>
+              <Text style={styles.statLabel}>Log out</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.featuresContainer}>
@@ -127,23 +128,6 @@ export default function AdminHome() {
               </View>
             </LinearGradient>
           </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <LinearGradient
-            colors={["#EF4444", "#DC2626"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.logoutGradient}
-          >
-            <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={styles.logoutText}>Logout</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Admin System v1.0</Text>
-          <Text style={styles.footerEmail}>{auth.currentUser?.email}</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -281,9 +265,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   arrowText: {
-    fontSize: 20,
+    fontSize: 25,
     color: '#FFFFFF',
     fontWeight: 'bold',
+    alignSelf: 'center',
+    marginTop: -8,
   },
   logoutButton: {
     borderRadius: 16,

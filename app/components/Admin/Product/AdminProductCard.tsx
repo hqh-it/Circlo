@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { adminDeleteProduct, approveProduct, getProductRejectionReasons, rejectProduct, sendProductNotification } from '../../../../services/Admin/AdminNotificationService';
+import { adminDeleteProduct, approveProduct, getProductRejectionReasons, sendProductNotification } from '../../../../services/Admin/AdminNotificationService';
 import { formatPrice, getTimeAgo } from '../../../../services/Product/productService';
 
 interface AuctionInfo {
@@ -20,7 +20,7 @@ interface AuctionInfo {
   startTime: any;
   endTime: any;
   bidCount: number;
-  status: 'active' | 'ended';
+  status: 'active' | 'ended'|'pending';
   bidIncrement: number;
   buyNowPrice?: number;
   highestBidder?: string | null;
@@ -125,21 +125,16 @@ const AdminProductCard: React.FC<AdminProductCardProps> = ({
     try {
       const finalReason = selectedRejectReason === 'Other' ? customRejectReason : selectedRejectReason;
       
-      const result = await rejectProduct(product.id, product.type, selectedRejectReason, customRejectReason);
+      await sendProductNotification(product.sellerId, 'rejected', product.title, finalReason, product.id);
       
-      if (result.success) {
-        await sendProductNotification(product.sellerId, 'rejected', product.title, finalReason, product.id);
-        Alert.alert('Success', result.message);
-        setSelectedRejectReason('');
-        setCustomRejectReason('');
-        setShowRejectModal(false);
-        onProductUpdate?.();
-        onReject?.(product.id);
-      } else {
-        Alert.alert('Error', result.error || 'Failed to reject product');
-      }
+      Alert.alert('Success', 'Rejection notification sent successfully');
+      setSelectedRejectReason('');
+      setCustomRejectReason('');
+      setShowRejectModal(false);
+      onProductUpdate?.();
+      onReject?.(product.id);
     } catch (error) {
-      Alert.alert('Error', 'Something went wrong while rejecting product');
+      Alert.alert('Error', 'Failed to send rejection notification');
     } finally {
       setActionLoading(false);
     }

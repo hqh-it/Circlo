@@ -1,9 +1,10 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -84,6 +85,11 @@ const AddAuctionProduct = () => {
   const [showDurationUnitModal, setShowDurationUnitModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const scrollViewRef = useRef<ScrollView>(null);
+  const durationInputRef = useRef<TextInput>(null);
+  const bidIncrementInputRef = useRef<TextInput>(null);
+  const buyNowPriceInputRef = useRef<TextInput>(null);
+
   const durationUnits = [
     { label: 'Minutes', value: 'minutes' },
     { label: 'Hours', value: 'hours' },
@@ -99,6 +105,17 @@ const AddAuctionProduct = () => {
     };
     loadUser();
   }, [user]);
+
+  const formatNumberInput = (value: string) => {
+    const numericValue = value.replace(/[^\d]/g, '');
+    if (numericValue === '') return '';
+    const number = parseInt(numericValue);
+    return number.toLocaleString('vi-VN');
+  };
+
+  const parseFormattedNumber = (formattedValue: string) => {
+    return formattedValue.replace(/[^\d]/g, '');
+  };
 
   const handleProductAdded = useCallback((product: ProductData) => {
     setProductData(product);
@@ -148,6 +165,16 @@ const AddAuctionProduct = () => {
       [field]: value
     }));
   }, []);
+
+  const handleBidIncrementChange = (value: string) => {
+    const formattedValue = formatNumberInput(value);
+    handleAuctionSettingChange('bidIncrement', formattedValue);
+  };
+
+  const handleBuyNowPriceChange = (value: string) => {
+    const formattedValue = formatNumberInput(value);
+    handleAuctionSettingChange('buyNowPrice', formattedValue);
+  };
 
   const handleDateChange = useCallback((event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
@@ -206,36 +233,57 @@ const AddAuctionProduct = () => {
     return endDateTime;
   };
 
-  const createAuctionChatChannel = async (productId: string) => {
-    try {
-      if (!user || !productData) return { success: false, error: 'Missing user or product data' };
-
-      const createChannelData = {
-        auctionId: productId,
-        productInfo: {
-          id: productId,
-          title: productData.title,
-          images: productData.images,
-          startPrice: parseFloat(productData.price),
-          sellerId: user.uid,
-          bidIncrement: parseFloat(auctionSettings.bidIncrement),
-          startTime: calculateEndTime(), // Using the calculated end time
-          endTime: calculateEndTime()
-        },
-        createdBy: user.uid,
-        participants: [user.uid],
-        startPrice: parseFloat(productData.price),
-        bidIncrement: parseFloat(auctionSettings.bidIncrement),
-        startTime: calculateEndTime(),
-        endTime: calculateEndTime()
-      };
-
-      const channelResult = await auctionChatService.createAuctionChannel(createChannelData);
-      return channelResult;
-    } catch (error: any) {
-      return { success: false, error: error.message };
+  const scrollToInput = (ref: any) => {
+    if (ref.current) {
+      ref.current.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+        scrollViewRef.current?.scrollTo({
+          y: pageY - 120,
+          animated: true
+        });
+      });
     }
   };
+
+  const handleInputFocus = (ref: any) => {
+    setTimeout(() => {
+      scrollToInput(ref);
+    }, 100);
+  };
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
+const createAuctionChatChannel = async (productId: string, startDateTime: Date, endDateTime: Date) => {
+  try {
+    if (!user || !productData) return { success: false, error: 'Missing user or product data' };
+
+    const createChannelData = {
+      auctionId: productId,
+      productInfo: {
+        id: productId,
+        title: productData.title,
+        images: productData.images,
+        startPrice: parseFloat(productData.price),
+        sellerId: user.uid,
+        bidIncrement: parseFloat(parseFormattedNumber(auctionSettings.bidIncrement)),
+        startTime: startDateTime,
+        endTime: endDateTime
+      },
+      createdBy: user.uid,
+      participants: [user.uid],
+      startPrice: parseFloat(productData.price),
+      bidIncrement: parseFloat(parseFormattedNumber(auctionSettings.bidIncrement)),
+      startTime: startDateTime,
+      endTime: endDateTime
+    };
+
+    const channelResult = await auctionChatService.createAuctionChannel(createChannelData);
+    return channelResult;
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
 
   const handleAddProduct = async () => {
     if (!auctionSettings.startDate) {
@@ -250,7 +298,7 @@ const AddAuctionProduct = () => {
       Alert.alert('Error', 'Please enter valid duration');
       return;
     }
-    if (!auctionSettings.bidIncrement || parseFloat(auctionSettings.bidIncrement) <= 0) {
+    if (!auctionSettings.bidIncrement || parseFloat(parseFormattedNumber(auctionSettings.bidIncrement)) <= 0) {
       Alert.alert('Error', 'Please enter valid bid increment');
       return;
     }
@@ -292,11 +340,10 @@ const AddAuctionProduct = () => {
       const auctionSettingsData = {
         startTime: startDateTime,
         endTime: endDateTime,
-        bidIncrement: parseFloat(auctionSettings.bidIncrement),
-        buyNowPrice: auctionSettings.buyNowPrice ? parseFloat(auctionSettings.buyNowPrice) : null
+        bidIncrement: parseFloat(parseFormattedNumber(auctionSettings.bidIncrement)),
+        buyNowPrice: auctionSettings.buyNowPrice ? parseFloat(parseFormattedNumber(auctionSettings.buyNowPrice)) : null
       };
 
-      // Step 1: Tạo sản phẩm đấu giá
       const result = await createAuctionProduct(
         productData,
         auctionSettingsData,
@@ -305,16 +352,13 @@ const AddAuctionProduct = () => {
       );
 
       if (result.success && result.productId) {
-        // Step 2: Tạo kênh chat sau khi sản phẩm được tạo thành công
-        const channelResult = await createAuctionChatChannel(result.productId);
+        await createAuctionChatChannel(result.productId, startDateTime, endDateTime);
 
-        if (channelResult.success) {
-          Alert.alert('Success', 'Auction product and chat channel created successfully!');
-        } else {
-          Alert.alert('Success', 'Auction product created successfully, but chat channel creation failed.');
-        }
+        Alert.alert(
+          'Success', 
+          'Auction product has been submitted for review! It will be visible after admin approval.'
+        );
 
-        // Reset form
         setCurrentStep('add_product');
         setProductData(null);
         setFormData({
@@ -364,171 +408,185 @@ const AddAuctionProduct = () => {
 
     if (currentStep === 'auction_settings') {
       return (
-        <ScrollView 
-          style={styles.stepContent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <Text style={styles.stepTitle}>Step 2: Auction Settings</Text>
-          <Text style={styles.stepDescription}>
-            Configure the auction details for your product
-          </Text>
-          
-          {productData && (
-            <View style={styles.productCard}>
-              <View style={styles.productImageContainer}>
-                {productData.images.length > 0 ? (
-                  <Image 
-                    source={{ uri: productData.images[0] }} 
-                    style={styles.productImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.noImagePlaceholder}>
-                    <Text style={styles.noImageText}>No Image</Text>
-                  </View>
-                )}
-              </View>
-              
-              <View style={styles.productInfo}>
-                <Text style={styles.productTitle} numberOfLines={2}>
-                  {productData.title}
-                </Text>
-                <Text style={styles.productPrice}>
-                  {parseInt(productData.price).toLocaleString('en-US')} VND
-                </Text>
-                <Text style={styles.startingPrice}>Starting Price</Text>
-              </View>
-            </View>
-          )}
-
-          <View style={styles.auctionForm}>
-            <Text style={styles.formTitle}>Auction Configuration</Text>
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.stepContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.stepTitle}>Auction Settings</Text>
+            <Text style={styles.stepDescription}>
+              Configure the auction details for your product
+            </Text>
             
-            <View style={styles.formRow}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Start Date *</Text>
-                <TouchableOpacity 
-                  style={styles.pickerButton}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={auctionSettings.startDate ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
-                    {auctionSettings.startDate ? formatDate(auctionSettings.startDate) : 'Select date'}
+            {productData && (
+              <View style={styles.productCard}>
+                <View style={styles.productImageContainer}>
+                  {productData.images.length > 0 ? (
+                    <Image 
+                      source={{ uri: productData.images[0] }} 
+                      style={styles.productImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.noImagePlaceholder}>
+                      <Text style={styles.noImageText}>No Image</Text>
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.productInfo}>
+                  <Text style={styles.productTitle} numberOfLines={2}>
+                    {productData.title}
                   </Text>
-                </TouchableOpacity>
+                  <Text style={styles.productPrice}>
+                    {parseInt(productData.price).toLocaleString('vi-VN')} VND
+                  </Text>
+                  <Text style={styles.startingPrice}>Starting Price</Text>
+                </View>
               </View>
+            )}
+
+            <View style={styles.auctionForm}>
+              <Text style={styles.formTitle}>Auction Configuration</Text>
               
+              <View style={styles.formRow}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Start Date *</Text>
+                  <TouchableOpacity 
+                    style={styles.pickerButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={auctionSettings.startDate ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
+                      {auctionSettings.startDate ? formatDate(auctionSettings.startDate) : 'Select date'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Start Time *</Text>
+                  <TouchableOpacity 
+                    style={styles.pickerButton}
+                    onPress={() => setShowTimePicker(true)}
+                  >
+                    <Text style={auctionSettings.startTime ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
+                      {auctionSettings.startTime ? formatTime(auctionSettings.startTime) : 'Select time'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Start Time *</Text>
-                <TouchableOpacity 
-                  style={styles.pickerButton}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <Text style={auctionSettings.startTime ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
-                    {auctionSettings.startTime ? formatTime(auctionSettings.startTime) : 'Select time'}
+                <Text style={styles.label}>Auction Duration *</Text>
+                <View style={styles.durationContainer}>
+                  <TextInput
+                    ref={durationInputRef}
+                    style={styles.durationInput}
+                    value={auctionSettings.durationValue}
+                    onChangeText={(value) => handleAuctionSettingChange('durationValue', value)}
+                    placeholder="Enter duration"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                    selectionColor="#00A86B"
+                    onFocus={() => handleInputFocus(durationInputRef)}
+                  />
+                  <TouchableOpacity 
+                    style={styles.durationUnitButton}
+                    onPress={() => setShowDurationUnitModal(true)}
+                  >
+                    <Text style={styles.durationUnitText}>{getDurationLabel()}</Text>
+                    <Text style={styles.dropdownArrow}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Bid Increment *</Text>
+                <View style={styles.priceInputContainer}>
+                  <TextInput
+                    ref={bidIncrementInputRef}
+                    style={styles.priceInput}
+                    value={auctionSettings.bidIncrement}
+                    onChangeText={handleBidIncrementChange}
+                    placeholder="Minimum bid increase"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                    selectionColor="#00A86B"
+                    onFocus={() => handleInputFocus(bidIncrementInputRef)}
+                  />
+                  <Text style={styles.currency}>VND</Text>
+                </View>
+                <Text style={styles.helperText}>
+                  Minimum amount that bids must increase by
+                </Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Buy Now Price (Optional)</Text>
+                <View style={styles.priceInputContainer}>
+                  <TextInput
+                    ref={buyNowPriceInputRef}
+                    style={styles.priceInput}
+                    value={auctionSettings.buyNowPrice}
+                    onChangeText={handleBuyNowPriceChange}
+                    placeholder="Instant purchase price"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                    selectionColor="#00A86B"
+                    onFocus={() => handleInputFocus(buyNowPriceInputRef)}
+                  />
+                  <Text style={styles.currency}>VND</Text>
+                </View>
+                <Text style={styles.helperText}>
+                  Price for immediate purchase (ends auction)
+                </Text>
+              </View>
+
+              <View style={styles.summaryContainer}>
+                <Text style={styles.summaryTitle}>Auction Summary</Text>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Start Time:</Text>
+                  <Text style={styles.summaryValue}>
+                    {auctionSettings.startDate && auctionSettings.startTime 
+                      ? `${formatDate(auctionSettings.startDate)} ${formatTime(auctionSettings.startTime)}`
+                      : 'Not set'
+                    }
                   </Text>
-                </TouchableOpacity>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Duration:</Text>
+                  <Text style={styles.summaryValue}>
+                    {auctionSettings.durationValue 
+                      ? `${auctionSettings.durationValue} ${getDurationLabel().toLowerCase()}`
+                      : 'Not set'
+                    }
+                  </Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>End Time:</Text>
+                  <Text style={styles.summaryValue}>
+                    {calculateEndTime() 
+                      ? calculateEndTime()!.toLocaleString('en-US')
+                      : 'Not set'
+                    }
+                  </Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Bid Increment:</Text>
+                  <Text style={styles.summaryValue}>
+                    {auctionSettings.bidIncrement 
+                      ? `${auctionSettings.bidIncrement} VND`
+                      : 'Not set'
+                    }
+                  </Text>
+                </View>
               </View>
             </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Auction Duration *</Text>
-              <View style={styles.durationContainer}>
-                <TextInput
-                  style={styles.durationInput}
-                  value={auctionSettings.durationValue}
-                  onChangeText={(value) => handleAuctionSettingChange('durationValue', value)}
-                  placeholder="Enter duration"
-                  placeholderTextColor="#999"
-                  keyboardType="numeric"
-                />
-                <TouchableOpacity 
-                  style={styles.durationUnitButton}
-                  onPress={() => setShowDurationUnitModal(true)}
-                >
-                  <Text style={styles.durationUnitText}>{getDurationLabel()}</Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Bid Increment *</Text>
-              <View style={styles.priceInputContainer}>
-                <TextInput
-                  style={styles.priceInput}
-                  value={auctionSettings.bidIncrement}
-                  onChangeText={(value) => handleAuctionSettingChange('bidIncrement', value)}
-                  placeholder="Minimum bid increase"
-                  placeholderTextColor="#999"
-                  keyboardType="numeric"
-                />
-                <Text style={styles.currency}>VND</Text>
-              </View>
-              <Text style={styles.helperText}>
-                Minimum amount that bids must increase by
-              </Text>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Buy Now Price (Optional)</Text>
-              <View style={styles.priceInputContainer}>
-                <TextInput
-                  style={styles.priceInput}
-                  value={auctionSettings.buyNowPrice}
-                  onChangeText={(value) => handleAuctionSettingChange('buyNowPrice', value)}
-                  placeholder="Instant purchase price"
-                  placeholderTextColor="#999"
-                  keyboardType="numeric"
-                />
-                <Text style={styles.currency}>VND</Text>
-              </View>
-              <Text style={styles.helperText}>
-                Price for immediate purchase (ends auction)
-              </Text>
-            </View>
-
-            <View style={styles.summaryContainer}>
-              <Text style={styles.summaryTitle}>Auction Summary</Text>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Start Time:</Text>
-                <Text style={styles.summaryValue}>
-                  {auctionSettings.startDate && auctionSettings.startTime 
-                    ? `${formatDate(auctionSettings.startDate)} ${formatTime(auctionSettings.startTime)}`
-                    : 'Not set'
-                  }
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Duration:</Text>
-                <Text style={styles.summaryValue}>
-                  {auctionSettings.durationValue 
-                    ? `${auctionSettings.durationValue} ${getDurationLabel().toLowerCase()}`
-                    : 'Not set'
-                  }
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>End Time:</Text>
-                <Text style={styles.summaryValue}>
-                  {calculateEndTime() 
-                    ? calculateEndTime()!.toLocaleString('en-US')
-                    : 'Not set'
-                  }
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Bid Increment:</Text>
-                <Text style={styles.summaryValue}>
-                  {auctionSettings.bidIncrement 
-                    ? `${parseInt(auctionSettings.bidIncrement).toLocaleString('en-US')} VND`
-                    : 'Not set'
-                  }
-                </Text>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
+            <View style={styles.bottomSpacer} />
+          </ScrollView>
+        </TouchableWithoutFeedback>
       );
     }
   };
@@ -673,7 +731,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 5,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e5ea',
@@ -682,13 +740,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   step: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#e0e0e0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
   },
   activeStep: {
     backgroundColor: '#00A86B',
@@ -696,21 +753,21 @@ const styles = StyleSheet.create({
   stepText: {
     color: '#666',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 12,
   },
   activeStepText: {
     color: '#fff',
   },
   stepLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
   },
   stepLine: {
-    width: 40,
-    height: 2,
+    width: 30,
+    height: 1,
     backgroundColor: '#e0e0e0',
-    marginHorizontal: 10,
-    marginTop: -15,
+    marginHorizontal: 8,
+    marginTop: -12,
   },
   content: {
     flex: 1,
@@ -725,24 +782,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#00A86B',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 12,
   },
   stepDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
+    marginBottom: 16,
+    lineHeight: 16,
     paddingHorizontal: 16,
   },
   productCard: {
     backgroundColor: '#fff',
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -800,9 +858,10 @@ const styles = StyleSheet.create({
   },
   auctionForm: {
     backgroundColor: '#fff',
-    padding: 20,
+    padding: 16,
     borderRadius: 12,
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -812,10 +871,10 @@ const styles = StyleSheet.create({
     borderColor: '#e5e5ea',
   },
   formTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#00A86B',
-    marginBottom: 20,
+    marginBottom: 16,
     textAlign: 'center',
   },
   formRow: {
@@ -861,6 +920,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#fff',
+    color: '#333',
   },
   durationUnitButton: {
     flexDirection: 'row',
@@ -892,6 +952,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#fff',
     paddingRight: 60,
+    color: '#333',
   },
   currency: {
     position: 'absolute',
@@ -938,8 +999,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    padding: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e5e5ea',
@@ -947,7 +1008,7 @@ const styles = StyleSheet.create({
   backButton: {
     flex: 1,
     backgroundColor: '#f0f0f0',
-    padding: 16,
+    padding: 14,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
@@ -960,7 +1021,7 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#666',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
   },
   disabledButtonText: {
     color: '#999',
@@ -968,7 +1029,7 @@ const styles = StyleSheet.create({
   nextButton: {
     flex: 2,
     backgroundColor: '#00A86B',
-    padding: 16,
+    padding: 14,
     borderRadius: 8,
     alignItems: 'center',
     shadowColor: '#00A86B',
@@ -989,7 +1050,7 @@ const styles = StyleSheet.create({
   nextButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
@@ -1020,6 +1081,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     textAlign: 'center',
+  },
+  bottomSpacer: {
+    height: 20,
   },
 });
 

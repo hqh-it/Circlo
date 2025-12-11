@@ -1,4 +1,3 @@
-// services/GeminiService.js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 class GeminiService {
@@ -19,13 +18,8 @@ class GeminiService {
     this.conversationHistory = new Map();
   }
 
-  // =========== CÁC PHƯƠNG THỨC CẦN THIẾT ===========
-
-  // 1. Phương thức chat chính (không tham số userId)
   async chat(message) {
     try {
-      console.log(`💬 Chat: ${message.substring(0, 50)}...`);
-      
       if (this.isOutOfScope(message)) {
         return this.getOutOfScopeResponse();
       }
@@ -43,12 +37,10 @@ Trả lời bằng ${this.isVietnamese(message) ? 'tiếng Việt' : 'tiếng An
       return text || "Xin lỗi, tôi không có câu trả lời.";
       
     } catch (error) {
-      console.error('❌ Lỗi Gemini:', error.message);
       return this.getErrorMessage();
     }
   }
 
-  // 2. Phương thức chat với product context
   async chatWithProductContext(userMessage, product) {
     const prompt = `Người dùng đang xem sản phẩm trên Circlo:
 
@@ -65,10 +57,8 @@ Hãy tư vấn cụ thể về sản phẩm này:`;
     return await this.chat(prompt);
   }
 
-  // 3. Phương thức handle conversation (cần cho AIChatScreen)
   async handleConversation(messages, newMessage) {
     try {
-      // Xây dựng context từ tin nhắn cũ
       let context = '';
       messages.forEach(msg => {
         const role = msg.sender === 'user' ? 'Người dùng' : 'AI';
@@ -90,12 +80,10 @@ Hãy trả lời câu hỏi cuối cùng, giữ context của cuộc trò chuy�
       return text || "Xin lỗi, tôi không hiểu câu hỏi.";
       
     } catch (error) {
-      console.error('Lỗi conversation:', error);
       return this.getErrorMessage();
     }
   }
 
-  // 4. Phân tích sản phẩm
   async analyzeProductForChat(product) {
     const prompt = `Phân tích sản phẩm này trên Circlo:
 
@@ -110,7 +98,6 @@ Hãy đánh giá và đưa ra lời khuyên cho người mua:`;
     return await this.chat(prompt);
   }
 
-  // 5. Phân tích ảnh
   async analyzeImagesWithQuery(imagesBase64, userQuery) {
     try {
       const imageParts = imagesBase64.map(base64 => ({
@@ -135,12 +122,10 @@ Hãy mô tả sản phẩm trong ảnh và đưa ra lời khuyên về mua bán:
       return text || "Không thể phân tích ảnh.";
       
     } catch (error) {
-      console.error('Lỗi phân tích ảnh:', error);
       return "Lỗi phân tích ảnh.";
     }
   }
 
-  // 6. Phân tích giá
   async analyzePrice(product) {
     const prompt = `Phân tích giá cho: ${product.title}
 Giá: ${product.price ? product.price.toLocaleString() + ' VND' : '???'}
@@ -151,7 +136,6 @@ Tình trạng: ${product.condition || 'Không rõ'}
     return await this.chat(prompt);
   }
 
-  // 7. Kiểm tra câu hỏi không phù hợp
   isOutOfScope(message) {
     if (!message) return false;
     
@@ -166,7 +150,6 @@ Tình trạng: ${product.condition || 'Không rõ'}
     return blocked.some(topic => lowerMsg.includes(topic));
   }
 
-  // 8. Kiểm tra ngôn ngữ
   isVietnamese(text) {
     if (!text) return true;
     
@@ -183,7 +166,6 @@ Tình trạng: ${product.condition || 'Không rõ'}
     return viCount >= enCount;
   }
 
-  // 9. Convert ảnh
   async base64FromURI(uri) {
     try {
       const response = await fetch(uri);
@@ -202,12 +184,10 @@ Tình trạng: ${product.condition || 'Không rõ'}
     }
   }
 
-  // 10. Thông báo lỗi
   getErrorMessage() {
     return "Xin lỗi, có lỗi xảy ra. Vui lòng thử lại sau.";
   }
 
-  // 11. Trả lời khi ngoài phạm vi
   getOutOfScopeResponse() {
     return "Tôi chỉ có thể tư vấn về mua bán sản phẩm. Bạn có câu hỏi về sản phẩm nào không?";
   }

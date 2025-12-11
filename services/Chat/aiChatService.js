@@ -1,4 +1,3 @@
-// services/Chat/aiChatService.js
 import { chatService } from './chatService';
 
 const AI_CHANNEL_PREFIX = 'AI_CHANNEL_';
@@ -27,7 +26,6 @@ export const aiChatService = {
       throw new Error('Failed to create AI channel');
       
     } catch (error) {
-      console.error('Error getting AI channel:', error);
       throw error;
     }
   },

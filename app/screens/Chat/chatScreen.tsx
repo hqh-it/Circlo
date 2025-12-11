@@ -125,6 +125,15 @@ const ChatScreen = () => {
     }, 100);
   };
 
+  const handleAvatarPress = (userId: string) => {
+    router.push({
+      pathname: '../../screens/Profile/PublicProfile',
+      params: {
+        userId: userId
+      }
+    });
+  };
+
   const handleFocus = () => {
     setTimeout(() => {
       if (flatListRef.current && messages.length > 0) {
@@ -590,14 +599,16 @@ const ChatScreen = () => {
           {!isMyMessage && (
             <View style={styles.otherMessageWrapper}>
               {showAvatar && (
-                <Image 
-                  source={
-                    otherUser?.avatarURL 
-                      ? { uri: otherUser.avatarURL }
-                      : require('../../assets/icons/profile-picture.png')
-                  } 
-                  style={styles.avatar} 
-                />
+                <TouchableOpacity onPress={() => handleAvatarPress(item.senderId)}>
+                  <Image 
+                    source={
+                      otherUser?.avatarURL 
+                        ? { uri: otherUser.avatarURL }
+                        : require('../../assets/icons/profile-picture.png')
+                    } 
+                    style={styles.avatar} 
+                  />
+                </TouchableOpacity>
               )}
               {!showAvatar && <View style={styles.avatarSpacer} />}
               
@@ -666,14 +677,16 @@ const ChatScreen = () => {
                 )}
               </View>
               {showAvatar && (
-                <Image 
-                  source={
-                    currentUserData?.avatarURL 
-                      ? { uri: currentUserData.avatarURL }
-                      : require('../../assets/icons/profile-picture.png')
-                  } 
-                  style={styles.avatar} 
-                />
+                <TouchableOpacity onPress={() => currentUser && handleAvatarPress(currentUser.uid)}>
+                  <Image 
+                    source={
+                      currentUserData?.avatarURL 
+                        ? { uri: currentUserData.avatarURL }
+                        : require('../../assets/icons/profile-picture.png')
+                    } 
+                    style={styles.avatar} 
+                  />
+                </TouchableOpacity>
               )}
               {!showAvatar && <View style={styles.avatarSpacer} />}
             </View>
@@ -695,14 +708,16 @@ const ChatScreen = () => {
         {!isMyMessage && (
           <View style={styles.otherMessageWrapper}>
             {showAvatar && (
-              <Image 
-                source={
-                  otherUser?.avatarURL 
-                    ? { uri: otherUser.avatarURL }
-                    : require('../../assets/icons/profile-picture.png')
-                } 
-                style={styles.avatar} 
-              />
+              <TouchableOpacity onPress={() => handleAvatarPress(item.senderId)}>
+                <Image 
+                  source={
+                    otherUser?.avatarURL 
+                      ? { uri: otherUser.avatarURL }
+                      : require('../../assets/icons/profile-picture.png')
+                  } 
+                  style={styles.avatar} 
+                />
+              </TouchableOpacity>
             )}
             {!showAvatar && <View style={styles.avatarSpacer} />}
             
@@ -741,14 +756,16 @@ const ChatScreen = () => {
               )}
             </View>
             {showAvatar && (
-              <Image 
-                source={
-                  currentUserData?.avatarURL 
-                    ? { uri: currentUserData.avatarURL }
-                    : require('../../assets/icons/profile-picture.png')
-                } 
-                style={styles.avatar} 
-              />
+              <TouchableOpacity onPress={() => currentUser && handleAvatarPress(currentUser.uid)}>
+                <Image 
+                  source={
+                    currentUserData?.avatarURL 
+                      ? { uri: currentUserData.avatarURL }
+                      : require('../../assets/icons/profile-picture.png')
+                  } 
+                  style={styles.avatar} 
+                />
+              </TouchableOpacity>
             )}
             {!showAvatar && <View style={styles.avatarSpacer} />}
           </View>
@@ -848,14 +865,16 @@ const ChatScreen = () => {
             <Text style={styles.backButtonText}>‹</Text>
           </TouchableOpacity>
           
-          <Image 
-            source={
-              otherUser?.avatarURL 
-                ? { uri: otherUser.avatarURL } 
-                : require('../../assets/icons/profile-picture.png')
-            } 
-            style={styles.headerAvatar} 
-          />
+          <TouchableOpacity onPress={() => otherUser && handleAvatarPress(otherUser.uid)}>
+            <Image 
+              source={
+                otherUser?.avatarURL 
+                  ? { uri: otherUser.avatarURL } 
+                  : require('../../assets/icons/profile-picture.png')
+              } 
+              style={styles.headerAvatar} 
+            />
+          </TouchableOpacity>
           
           <View style={styles.headerInfo}>
             <Text style={styles.headerName}>
@@ -887,6 +906,7 @@ const ChatScreen = () => {
               product={productData}
               onPress={handleProductPress}
               showHideButton={true}
+              productType="regular"
             />
           )}
           
@@ -1201,7 +1221,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 12,
     marginTop: 4,
-
   },
   imagePreview: {
     width: 85,
@@ -1210,7 +1229,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#01332fff",
     backgroundColor: '#FFFFFF',
- 
   },
   removePreviewButton: {
     position: 'absolute',

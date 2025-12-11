@@ -37,6 +37,7 @@ interface ProductInfo {
   sellerName?: string;
   sellerAvatar?: string;
   condition?: string;
+  status?: string;
 }
 
 interface AuctionChannel {
@@ -89,10 +90,19 @@ const AuctionChatScreen = () => {
   const updateAuctionStatusRealTime = () => {
     if (!auctionChannel?.productInfo) return;
 
-    const status = auctionChatService.getAuctionStatus(
-      auctionChannel.productInfo.startTime,
-      auctionChannel.productInfo.endTime
-    ) as AuctionStatusType;
+    const now = new Date();
+    const startTime = auctionChatService.parseTimestamp(auctionChannel.productInfo.startTime);
+    const endTime = auctionChatService.parseTimestamp(auctionChannel.productInfo.endTime);
+    
+    let status: AuctionStatusType = 'upcoming';
+    
+    if (now < startTime) {
+      status = 'upcoming';
+    } else if (now > endTime) {
+      status = 'ended';
+    } else {
+      status = 'live';
+    }
     
     setAuctionStatus(status);
     updateTimeRemaining();
@@ -221,7 +231,6 @@ const AuctionChatScreen = () => {
               participantsMap[userId] = userData;
             }
           } catch (error) {
-            console.error(`Error loading user ${userId}:`, error);
             participantsMap[userId] = {
               uid: userId,
               displayName: 'User',
@@ -232,7 +241,6 @@ const AuctionChatScreen = () => {
         
         setParticipantsData(participantsMap);
       } catch (error) {
-        console.error('Error loading users:', error);
       } finally {
         setLoadingUsers(false);
       }
@@ -266,11 +274,8 @@ const AuctionChatScreen = () => {
         
         setAuctionChannel(auctionChannelData);
         updateAuctionStatus(auctionChannelData);
-      } else {
-        console.error('Failed to load auction channel:', result.error);
       }
     } catch (error) {
-      console.error('Error loading auction channel:', error);
     } finally {
       setLoading(false);
     }
@@ -297,17 +302,26 @@ const AuctionChatScreen = () => {
         });
       }
     } catch (error) {
-      console.error('Error refreshing auction channel:', error);
     }
   };
 
   const updateAuctionStatus = (channel: AuctionChannel) => {
     if (!channel.productInfo) return;
     
-    const status = auctionChatService.getAuctionStatus(
-      channel.productInfo.startTime,
-      channel.productInfo.endTime
-    ) as AuctionStatusType;
+    const now = new Date();
+    const startTime = auctionChatService.parseTimestamp(channel.productInfo.startTime);
+    const endTime = auctionChatService.parseTimestamp(channel.productInfo.endTime);
+    
+    let status: AuctionStatusType = 'upcoming';
+    
+    if (now < startTime) {
+      status = 'upcoming';
+    } else if (now > endTime) {
+      status = 'ended';
+    } else {
+      status = 'live';
+    }
+    
     setAuctionStatus(status);
   };
 
@@ -390,6 +404,49 @@ const AuctionChatScreen = () => {
 
   const handleCloseResult = () => {
     setShowResult(false);
+  };
+
+  const handleProductPress = () => {
+    if (auctionChannel?.productInfo?.id) {
+      router.push({
+        pathname: '../../screens/Auction/auction_detail',
+        params: { id: auctionChannel.productInfo.id }
+      });
+    }
+  };
+
+  const handleExitChat = async () => {
+    if (!channelId || !currentUser) {
+      return;
+    }
+
+    Alert.alert(
+      'Exit Auction Room',
+      'Are you sure you want to exit this auction room?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Exit',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const exitResult = await auctionChatService.exitAuctionRoom(channelId, currentUser.uid);
+              
+              if (exitResult.success) {
+                router.back();
+              } else {
+                Alert.alert('Error', exitResult.error || 'Failed to exit auction room');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to exit auction room');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const renderBidMessage = (item: BidMessage) => {
@@ -653,6 +710,15 @@ const AuctionChatScreen = () => {
               {auctionChannel.participantCount} participants • {auctionChannel.bidCount} bids
             </Text>
           </View>
+          <TouchableOpacity 
+            style={styles.exitButton}
+            onPress={handleExitChat}
+          >
+            <Image 
+              source={require('../../assets/icons/outchat.png')}
+              style={styles.exitIcon}
+            />
+          </TouchableOpacity>
           <View style={[
             styles.auctionStatus,
             auctionStatus === 'live' && styles.statusLive,
@@ -674,17 +740,19 @@ const AuctionChatScreen = () => {
               product={{
                 id: auctionChannel.productInfo.id,
                 title: auctionChannel.productInfo.title,
-                price: auctionChannel.productInfo.startPrice || 0,
+                price: auctionChannel.currentBid || auctionChannel.productInfo.startPrice || 0,
                 images: auctionChannel.productInfo.images,
                 sellerId: auctionChannel.productInfo.sellerId
               }}
+              onPress={handleProductPress}
               showHideButton={true}
+              productType="auction"
             />
           )}
 
           {renderAuctionStats()}
           <View style={styles.chatContent}>
-  
+
             <Image 
               source={require('../../assets/images/auctionChat.gif')}
               style={styles.backgroundGif}
@@ -789,6 +857,15 @@ const styles = StyleSheet.create({
     color: "#F0E68C",
     marginTop: 2,
     fontWeight: '500',
+  },
+  exitButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  exitIcon: {
+    width: 24,
+    height: 24,
+    tintColor: "#f8f8f8"
   },
   auctionStatus: {
     paddingHorizontal: 16,

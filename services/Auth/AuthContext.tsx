@@ -1,4 +1,3 @@
-// AuthContext.tsx
 import { useRouter } from 'expo-router';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -9,23 +8,31 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   logout: () => Promise<void>;
+  isAdmin: boolean;
+  userRole: string;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
   loading: true,
-  logout: async () => {}
+  logout: async () => {},
+  isAdmin: false,
+  userRole: 'user'
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState('user');
   const router = useRouter();
 
   const logout = async () => {
     try {
       await signOut(auth);
       setUser(null);
+      setIsAdmin(false);
+      setUserRole('user');
       router.replace('/screens/Auth/login');
     } catch (error) {
       console.error('Logout error:', error);
@@ -44,9 +51,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const isSuspended = userData?.isSuspended === true;
             const suspendedUntil = userData?.suspendedUntil?.toDate();
             
+            const role = userData?.role || 'user';
+            setUserRole(role);
+            setIsAdmin(role === 'admin');
+            
             if (isBanned) {
               await signOut(auth);
               setUser(null);
+              setIsAdmin(false);
+              setUserRole('user');
               return;
             }
             
@@ -55,6 +68,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               if (now < suspendedUntil) {
                 await signOut(auth);
                 setUser(null);
+                setIsAdmin(false);
+                setUserRole('user');
                 return;
               } else {
                 await updateDoc(doc(db, "users", user.uid), {
@@ -70,13 +85,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(user);
           } else {
             setUser(user);
+            setIsAdmin(false);
+            setUserRole('user');
           }
         } catch (error) {
           console.error('Error checking user status:', error);
           setUser(user);
+          setIsAdmin(false);
+          setUserRole('user');
         }
       } else {
         setUser(null);
+        setIsAdmin(false);
+        setUserRole('user');
       }
       setLoading(false);
     });
@@ -85,7 +106,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout, isAdmin, userRole }}>
       {children}
     </AuthContext.Provider>
   );
