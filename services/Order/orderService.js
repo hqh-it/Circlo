@@ -12,7 +12,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { notificationService } from '../Notification/notificationService';
-import { updateProduct } from '../Product/productService';
 
 export const createOrder = async (orderData) => {
   try {
@@ -265,7 +264,8 @@ export const updateOrderStatus = async (orderId, newStatus) => {
       await notificationService.createOrderNotification(orderResult.order, notificationType);
 
       if (newStatus === 'completed') {
-        await markProductAsSold(orderResult.order.productId);
+        
+        await markProductAsSold(orderResult.order);
       }
     }
     
@@ -313,22 +313,31 @@ export const confirmReceipt = async (orderId) => {
   }
 };
 
-const markProductAsSold = async (productId) => {
+const markProductAsSold = async (order) => {
   try {
-    console.log(`Marking product ${productId} as sold...`);
+    const { productId, orderType } = order;
+    console.log(`Marking ${orderType} product ${productId} as sold...`);
     
-    const updateResult = await updateProduct(productId, {
+    let collectionName = 'products';
+    
+    if (orderType === 'auction') {
+      collectionName = 'auction_products';
+    }
+    
+    const productRef = doc(db, collectionName, productId);
+    
+    await updateDoc(productRef, {
       status: 'sold',
       updatedAt: serverTimestamp()
     });
     
-    if (updateResult.success) {
-      console.log(`Product ${productId} marked as sold successfully`);
-    } else {
-      console.error(`Failed to mark product as sold:`, updateResult.error);
-    }
+    console.log(`Product ${productId} in ${collectionName} marked as sold successfully`);
     
-    return updateResult;
+    return {
+      success: true,
+      productType: orderType || 'regular'
+    };
+    
   } catch (error) {
     console.error('Error marking product as sold:', error);
     return {

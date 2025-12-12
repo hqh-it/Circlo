@@ -1105,6 +1105,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    maxWidth: width * 0.8,
   },
   analysisBubble: {
     backgroundColor: '#E3F2FD',
@@ -1174,15 +1175,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
-    maxWidth: 250,
+    maxWidth: width * 0.8,
   },
   myImageBubble: {
     backgroundColor: '#01332fff',
     borderColor: '#01332fff',
   },
   messageImage: {
-    width: 250,
-    height: 200,
+  width: '100%',
+  height: 200,
+  aspectRatio: 1,
   },
   imageCaption: {
     padding: 8,
