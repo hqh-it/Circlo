@@ -59,7 +59,7 @@ export default function AdminHome() {
           </TouchableOpacity>
 
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Product</Text>
+              <Text style={styles.statLabel}>APPLICATION</Text>
               <Text style={styles.statText}>Management</Text>
             </View>
 

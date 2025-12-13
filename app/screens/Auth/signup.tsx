@@ -165,7 +165,7 @@ export default function Signup({navigation}:any) {
                 }}
               >
                 <Text style={{ color: "#ffffffff", fontWeight: "900", fontSize: 18 }}>
-                  Sign in
+                  Sign up
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
