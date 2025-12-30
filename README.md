@@ -1,1 +1,1 @@
-This is my new app Circlo
+Circlo is a marketplace application for buying and selling second-hand goods, featuring real-time chat between buyers and sellers, integrated auction functionality, and AI-powered chat support to enhance and streamline the trading experience.

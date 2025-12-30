@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../../services/Auth/AuthContext';
 import { banksData } from '../../services/User/bankData';
 import { addBankAccount, updateBankAccount } from '../../services/User/userService';
-import BankPicker from './BankPicker'; // Import BankPicker component
+import BankPicker from './BankPicker';
 
 const { width } = Dimensions.get('window');
 
@@ -132,8 +132,6 @@ const AddBank: React.FC<AddBankProps> = ({ visible, onClose, onBankAdded, editin
           <Text style={styles.modalTitle}>
             {editingBank ? 'Edit Bank Account' : 'Add Bank Account'}
           </Text>
-
-          {/* Sử dụng BankPicker component */}
           <BankPicker
             selectedBank={selectedBank}
             onBankSelect={handleBankSelect}
@@ -146,6 +144,7 @@ const AddBank: React.FC<AddBankProps> = ({ visible, onClose, onBankAdded, editin
             value={accountNumber}
             onChangeText={setAccountNumber}
             keyboardType="numeric"
+            placeholderTextColor="#666666"
           />
 
           <TextInput
@@ -153,6 +152,7 @@ const AddBank: React.FC<AddBankProps> = ({ visible, onClose, onBankAdded, editin
             placeholder="Account Holder Name"
             value={accountHolder}
             onChangeText={setAccountHolder}
+            placeholderTextColor="#666666"
           />
 
           <View style={styles.buttonContainer}>
@@ -208,7 +208,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 15,
     fontSize: 16,
-    marginTop: 15, // Thêm khoảng cách phía trên
+    marginTop: 15,
+    color: '#000000',
   },
   buttonContainer: {
     flexDirection: 'row',
